@@ -47,8 +47,9 @@ jurisdiction-specific.
   and CAD entity links, stored point/label styles, link reconciliation, Point Manager filtering,
   selection/location, editing, repair, renumbering, deletion and deterministic CSV export. Every
   mutation rolls back atomically and becomes one Undo step.
-- **Next:** v0.4.0 open code books, code diagnostics and code-driven layers, symbols and feature
-  lines.
+- **Current priority:** upstream review of the CADCraft extension host. v0.4.0 code books,
+  diagnostics, layers, symbols and feature lines are paused; see
+  [HOST_COMPATIBILITY.md](HOST_COMPATIBILITY.md).
 - **Host dependency:** installation currently requires the unreleased generic schema 2 capability
   from CADCraft PR #1384; SurveyCraft itself remains a separate repository and package.
 

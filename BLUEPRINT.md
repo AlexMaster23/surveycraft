@@ -110,23 +110,24 @@ surveycraft/
 
 ### Current host dependency
 
-CADCraft PR #1384 provides schema-1 packages, installation, command registration, permissions,
-menus, CLI management and an AutoLISP runtime. A local follow-up implementation now proves the
-schema-2 WebAssembly path needed by SurveyCraft:
+The custom CADCraft integration in draft PR #1384 implements package installation, command
+registration, permissions, menus, Tool Sets and CLI management. Its schema-2 WebAssembly path
+currently provides the capabilities used by SurveyCraft:
 
 - schema-2 `wasm-component` entry point;
-- a versioned host API for drawing queries and transactions;
-- prompt, selection, progress and cancellation services;
-- declarative forms/panels owned and rendered by CADCraft;
-- capability-based file access, with no process or implicit network access;
-- deterministic fuel/memory/input limits and panic isolation.
+- a versioned host API for guarded drawing transactions and entity queries/updates;
+- namespaced persistent drawing/entity metadata;
+- native data-entry tables and record managers, including drawing selection/location;
+- host-owned file selection and text export, without ambient guest file/network/process access;
+- bounded fuel, memory and input, with rollback on guest failure.
 
 The native host, standalone SurveyCraft package, guarded drawing transaction, native coordinate
 table and one-step undo work end to end. The generic host exposes line, point and text creation;
 SurveyCraft supplies only command metadata and sandboxed guest logic. Browser execution, richer
 host services and upstream review remain. Once the host capability ships in a normal CADCraft
 release, users install one `surveycraft.cadcraft-extension` package without a custom CADCraft
-build.
+build. The staged [upstream plan](docs/HOST_COMPATIBILITY.md) begins with package/AutoLISP support
+alone; that first stage does not yet run SurveyCraft.
 
 ## 4. Domain model
 
@@ -292,4 +293,7 @@ SurveyCraft 1.0 is ready when a user on the latest stable CADCraft can:
 6. [Done locally] Add persistent point identity/metadata, migrations and initial point styles.
 7. [Done locally] Build the v0.3 Point Manager with filtering, selection/location, linked editing,
    repair, renumbering, deletion and deterministic CSV export.
-8. [Next] Build the v0.4 open code-book format and code-driven feature generation.
+8. [Current] Obtain upstream review of the staged CADCraft host proposal; see
+   [HOST_COMPATIBILITY.md](docs/HOST_COMPATIBILITY.md).
+9. [Paused pending host direction] Build the v0.4 open code-book format and code-driven feature
+   generation.

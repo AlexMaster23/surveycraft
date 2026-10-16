@@ -4,9 +4,13 @@
   <img src="assets/brand/surveycraft-lockup.svg" alt="SurveyCraft — open surveying tools for CADCraft" width="720">
 </p>
 
-SurveyCraft is an open-source surveying, terrain and cadastral extension for CADCraft. It is an
-ordinary installable extension with its own repository and release package, not a fork of CADCraft
-and not source code bundled into CADCraft's extension-system pull request.
+SurveyCraft is an open-source surveying, terrain and cadastral extension for CADCraft, distributed
+from its own repository as an installable extension package.
+
+**Developer preview: current SurveyCraft releases require a custom CADCraft build. They do not
+work with official CADCraft v0.7.0.** The required extension host is proposed upstream and has not
+been accepted or released. v0.4 feature work is paused while that proposal is reviewed. See
+[host compatibility and the upstream plan](docs/HOST_COMPATIBILITY.md) before installing.
 
 This repository contains the **Phase 0 engineering foundation** and the working Phase 1 point
 import, persistent point identity and Point Manager workflow. The implementation plan is in
@@ -45,20 +49,22 @@ project.
 
 ## Runtime direction
 
-The surveying engine will be written as pure, testable Rust crates. The production CADCraft
-adapter will compile to WebAssembly once the CADCraft extension host supports a portable WASM
-runtime. A thin AutoLISP/bootstrap layer may remain for command ergonomics, but terrain and
-coordinate mathematics will not be implemented as an opaque LISP monolith.
+The surveying engine is written as pure, testable Rust crates. Its CADCraft adapter compiles to
+WebAssembly and currently runs in the proposed schema-2 host. The host architecture remains subject
+to upstream review; SurveyCraft will adapt its integration to the accepted API.
 
 The generic CADCraft extension-system work is tracked separately in
-[storytold/cadcraft#1384](https://github.com/storytold/cadcraft/pull/1384). That pull request contains
-the host capability only. SurveyCraft remains in this standalone project and is mentioned there
-only as an external integration proof.
+[storytold/cadcraft#1384](https://github.com/storytold/cadcraft/pull/1384), which preserves the full
+integration as a draft reference. The [upstream plan](docs/HOST_COMPATIBILITY.md#upstream-review-plan)
+starts with the smaller [package/AutoLISP foundation in PR #1446](https://github.com/storytold/cadcraft/pull/1446).
+SurveyCraft remains in this standalone project.
 
 ## Build the extension
 
-Until the generic schema 2 host is released by CADCraft, use a CADCraft build from PR #1384. Build
-the guest and create the installable package with:
+For development, SurveyCraft v0.3.0 was verified against custom CADCraft host commit
+[`6f51a62`](https://github.com/AlexMaster23/cadcraft/commit/6f51a623fba868838ec26f27eb8933c537fe8850)
+from PR #1384. The smaller foundation branch alone cannot run it. Build the guest and create the
+installable package with:
 
 ```text
 rustup target add wasm32-unknown-unknown

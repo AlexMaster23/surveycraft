@@ -8,6 +8,13 @@ host capabilities exist.
 The product phases and clean-room engineering constraints remain defined in
 [BLUEPRINT.md](BLUEPRINT.md). GitHub milestones mirror the versions below.
 
+## Current priority: official CADCraft host support
+
+v0.4 feature development is paused while the extension-host proposal receives upstream review.
+The v0.1–v0.3 prereleases remain available for development with a custom CADCraft build; no official
+CADCraft release currently supports them. See [HOST_COMPATIBILITY.md](docs/HOST_COMPATIBILITY.md)
+for the tested host revision, staged review plan and conditions for resuming feature work.
+
 ## Release train
 
 | Version | Product phase | Status | Usable outcome |
@@ -15,7 +22,7 @@ The product phases and clean-room engineering constraints remain defined in
 | [v0.1.0](https://github.com/AlexMaster23/surveycraft/releases/tag/v0.1.0) | Phase 1 preview | Released | Import manual/CSV points with an explicit coordinate convention and insert native point/label entities in one undo step. |
 | [v0.2.0](https://github.com/AlexMaster23/surveycraft/releases/tag/v0.2.0) | Phase 1 | Released | Persist stable survey-point identities and CAD entity links across save/reopen. |
 | [v0.3.0](https://github.com/AlexMaster23/surveycraft/releases/tag/v0.3.0) | Phase 1 | Released | Manage, edit, renumber, delete, select, locate, repair and export existing survey points. |
-| v0.4.0 | Phase 1 | Next | Apply open code-book rules to layers, labels, feature lines and original symbols. |
+| v0.4.0 | Phase 1 | Paused — upstream host review | Apply open code-book rules to layers, labels, feature lines and original symbols. |
 | v0.5.0 | Phase 1 beta | Planned | Diagnose point quality and provide the first practical COGO tool set. |
 | v0.6.0 | Phase 2 | Planned | Discover and validate parcels; create linked area/perimeter labels and tables. |
 | v0.7.0 | Phase 2 | Planned | Divide parcels to exact target areas and export parcel/room reports. |
