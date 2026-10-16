@@ -10,7 +10,7 @@ jurisdiction-specific.
 |---|---|---|---:|
 | Project/configuration | Drawing-specific scales, layers, point/model/image/plan settings | Versioned `SurveyProject` stored as extension metadata, with explicit migrations | P0 |
 | Point import | Read coordinate/text and field formats, order/deduplicate, create points | Preview-first mapping, diagnostics, deterministic import, source-record trace | P0 |
-| Point management | Renumber, update, delete, transform labels/codes/elevations | Point Manager panel plus batch commands, all undoable | P0 |
+| Point management | Renumber, update, delete, transform labels/codes/elevations | **Implemented in v0.3.0:** native Point Manager, selection/location, synchronized edits, repair, batch renumber/delete and CSV export | P0 |
 | Point quality | Detect close/duplicate points, optimize labels, snap geometry to survey points | Non-destructive diagnostics with selectable fixes | P1 |
 | COGO | Polar/sightshot calculations and coordinate reports | Inverse, traverse, intersections and observation reduction in pure Rust | P0/P1 |
 | Instrument transfer | Receive/send coordinates and record measurements | Separate opt-in device capability and open instrument profiles | P3 |
@@ -42,12 +42,13 @@ jurisdiction-specific.
 
 - **Release train:** [ROADMAP.md](../ROADMAP.md) maps these modules to versioned GitHub milestones
   from the released v0.1.0 point-import preview through v1.0.0 and the post-1.0 phases.
-- **Implemented locally:** deterministic point CSV/project parsing, schema-v1-to-v2 migration,
+- **Released through v0.3.0:** deterministic point CSV/project parsing, schema-v1-to-v2 migration,
   native manual and CSV coordinate table, required/numeric/duplicate validation, persistent UUID
-  and CAD entity links, stored point/label styles, link reconciliation, transaction rollback and
-  one-step undo.
-- **Next:** interactive style controls, editing existing drawing points, the full Point Manager and
-  code-book-driven symbols/feature lines.
+  and CAD entity links, stored point/label styles, link reconciliation, Point Manager filtering,
+  selection/location, editing, repair, renumbering, deletion and deterministic CSV export. Every
+  mutation rolls back atomically and becomes one Undo step.
+- **Next:** v0.4.0 open code books, code diagnostics and code-driven layers, symbols and feature
+  lines.
 - **Host dependency:** installation currently requires the unreleased generic schema 2 capability
   from CADCraft PR #1384; SurveyCraft itself remains a separate repository and package.
 

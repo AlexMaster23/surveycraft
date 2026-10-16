@@ -82,6 +82,8 @@ It does not silently repair or overwrite external edits.
 
 - Input text must be UTF-8.
 - Point and label styles are persisted but do not yet have a settings editor.
-- Editing, renumbering, interactive repair and code-book rules belong to the upcoming Point Manager.
+- Code-book rules and interactive point/label style controls remain planned.
+- Use the v0.3 [Point Manager](POINT_MANAGER.md) for editing, renumbering, repair, deletion and
+  export after insertion.
 
 These limits are explicit so drawings created by the MVP remain understandable and reversible.

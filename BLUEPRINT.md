@@ -290,4 +290,6 @@ SurveyCraft 1.0 is ready when a user on the latest stable CADCraft can:
 4. [Done locally] Implement the CADCraft WASM host contract and standalone extension package.
 5. [Done locally] Implement native table/CSV point insertion, CAD display layers and one-step undo.
 6. [Done locally] Add persistent point identity/metadata, migrations and initial point styles.
-7. [Next] Build the full Point Manager UI from the approved wireframe.
+7. [Done locally] Build the v0.3 Point Manager with filtering, selection/location, linked editing,
+   repair, renumbering, deletion and deterministic CSV export.
+8. [Next] Build the v0.4 open code-book format and code-driven feature generation.

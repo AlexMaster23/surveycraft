@@ -39,9 +39,11 @@ canvas always remains visible.
 
 ### Point Manager
 
-A virtualized table for tens of thousands of points with columns for number, E, N, H, code,
-description and quality. Import problems are filterable. Editing is staged and committed in one
-undoable transaction.
+A native, virtualized table for up to 2,000 linked points is implemented in v0.3.0. It shows point
+number, CAD X/Easting, CAD Y/Northing, elevation, code, description, quality and link status.
+Filtering, drawing selection/location, staged editing, synchronization/repair, batch renumbering,
+linked deletion and deterministic CSV export are available. Each write action commits in one
+undoable transaction. See [POINT_MANAGER.md](POINT_MANAGER.md).
 
 ### Point import dialog (implemented MVP)
 
@@ -58,8 +60,9 @@ brand accent while keeping CADCraft's theme and controls. A user can:
 - see missing, non-numeric and duplicate point-number errors before insertion;
 - insert all valid rows as one drawing transaction and one Undo step.
 
-This focused dialog is the entry workflow, not the final Point Manager. The manager will add
-persistent point identity, filtering, editing, styles and round-trip synchronization.
+This focused dialog remains the entry workflow. The v0.3 Point Manager uses the persistent point
+identity created here for filtering, editing, repair and round-trip synchronization. Style controls
+remain planned for a later version.
 
 ### Task dialogs
 

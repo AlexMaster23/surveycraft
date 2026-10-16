@@ -5,7 +5,8 @@ use std::collections::{BTreeMap, BTreeSet, HashSet};
 use std::error::Error;
 use std::fmt::{Display, Formatter};
 use surveycraft_core::{
-    Crs, LinearUnit, NumericPolicy, SourceRef, SurveyPoint, SurveyProject, migrate_project,
+    Crs, LinearUnit, NumericPolicy, QualityFlag, SourceRef, SurveyPoint, SurveyProject,
+    migrate_project,
 };
 use surveycraft_geometry::Point3;
 use uuid::Uuid;
@@ -19,6 +20,8 @@ const MAX_INSERT_POINTS: usize = 2_000;
 const MAX_COORDINATE: f64 = 1.0e15;
 const MAX_POINT_NUMBER_BYTES: usize = 128;
 const MAX_CODE_BYTES: usize = 256;
+const MAX_DESCRIPTION_BYTES: usize = 1_024;
+const MAX_MANAGER_MUTATION_POINTS: usize = 500;
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Serialize, Deserialize)]
 pub struct TransactionId(pub u64);
@@ -190,6 +193,103 @@ pub struct ReconciliationReport {
     pub modified_entities: usize,
     pub orphaned_entities: usize,
     pub issues: Vec<ReconciliationIssue>,
+}
+
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+#[serde(
+    tag = "action",
+    rename_all = "kebab-case",
+    rename_all_fields = "camelCase",
+    deny_unknown_fields
+)]
+pub enum PointManagerRequest {
+    List,
+    Update {
+        rows: Vec<PointManagerEdit>,
+    },
+    Delete {
+        ids: Vec<Uuid>,
+    },
+    Synchronize {
+        ids: Vec<Uuid>,
+    },
+    Renumber {
+        ids: Vec<Uuid>,
+        #[serde(default)]
+        prefix: String,
+        start: u64,
+        step: u64,
+    },
+    Export {
+        #[serde(default)]
+        ids: Vec<Uuid>,
+    },
+}
+
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase", deny_unknown_fields)]
+pub struct PointManagerEdit {
+    pub id: Uuid,
+    pub number: String,
+    pub x: f64,
+    pub y: f64,
+    pub elevation: f64,
+    #[serde(default)]
+    pub code: String,
+    #[serde(default)]
+    pub description: String,
+}
+
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct PointManagerRow {
+    pub id: Uuid,
+    pub entities: Vec<u64>,
+    pub number: String,
+    pub x: f64,
+    pub y: f64,
+    pub elevation: f64,
+    pub code: String,
+    pub description: String,
+    pub quality: String,
+    pub status: String,
+}
+
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct PointManagerSnapshot {
+    pub rows: Vec<PointManagerRow>,
+    pub summary: String,
+    pub project_id: Option<Uuid>,
+    pub points: usize,
+    pub healthy_points: usize,
+    pub missing_entities: usize,
+    pub modified_entities: usize,
+    pub orphaned_entities: usize,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct PointManagerMutation {
+    pub message: String,
+    pub affected: usize,
+    pub total_points: usize,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct PointManagerExport {
+    pub file_name: String,
+    pub content: String,
+    pub points: usize,
+}
+
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+#[serde(untagged)]
+pub enum PointManagerResult {
+    Snapshot(PointManagerSnapshot),
+    Mutation(PointManagerMutation),
+    Export(PointManagerExport),
 }
 
 fn default_label_height() -> f64 {
@@ -560,6 +660,817 @@ pub fn inspect_project(host: &mut impl CadcraftHost) -> Result<ReconciliationRep
         ));
     }
     Ok(report)
+}
+
+/// Load or mutate the persistent point model through the native CADCraft data-manager protocol.
+pub fn manage_points(
+    host: &mut impl CadcraftHost,
+    request: &PointManagerRequest,
+) -> Result<PointManagerResult, AdapterError> {
+    match request {
+        PointManagerRequest::List => list_managed_points(host).map(PointManagerResult::Snapshot),
+        PointManagerRequest::Update { rows } => {
+            update_managed_points(host, rows).map(PointManagerResult::Mutation)
+        }
+        PointManagerRequest::Delete { ids } => {
+            delete_managed_points(host, ids).map(PointManagerResult::Mutation)
+        }
+        PointManagerRequest::Synchronize { ids } => {
+            synchronize_managed_points(host, ids).map(PointManagerResult::Mutation)
+        }
+        PointManagerRequest::Renumber {
+            ids,
+            prefix,
+            start,
+            step,
+        } => renumber_managed_points(host, ids, prefix, *start, *step)
+            .map(PointManagerResult::Mutation),
+        PointManagerRequest::Export { ids } => {
+            export_managed_points(host, ids).map(PointManagerResult::Export)
+        }
+    }
+}
+
+fn mutation_message(action: &str, count: usize) -> String {
+    format!(
+        "{action} {count} survey {}",
+        if count == 1 { "point" } else { "points" }
+    )
+}
+
+fn list_managed_points(host: &mut impl CadcraftHost) -> Result<PointManagerSnapshot, AdapterError> {
+    let snapshot = point_manager_snapshot(host)?;
+    commit_read_only(host, "List SurveyCraft points", "complete point listing")?;
+    Ok(snapshot)
+}
+
+fn point_manager_snapshot(
+    host: &mut impl CadcraftHost,
+) -> Result<PointManagerSnapshot, AdapterError> {
+    let Some(stored) = load_drawing_project(host)? else {
+        return Ok(PointManagerSnapshot {
+            rows: Vec::new(),
+            summary: "No SurveyCraft point project is stored in this drawing".into(),
+            project_id: None,
+            points: 0,
+            healthy_points: 0,
+            missing_entities: 0,
+            modified_entities: 0,
+            orphaned_entities: 0,
+        });
+    };
+    let report = reconcile(host, &stored)?;
+    let mut issues: BTreeMap<Uuid, Vec<ReconciliationIssueKind>> = BTreeMap::new();
+    for issue in &report.issues {
+        issues.entry(issue.point_id).or_default().push(issue.kind);
+    }
+    let links: BTreeMap<Uuid, &PointEntityLinks> = stored
+        .entity_links
+        .iter()
+        .map(|links| (links.point_id, links))
+        .collect();
+    let mut rows = stored
+        .project
+        .points
+        .iter()
+        .filter_map(|point| {
+            let linked = links.get(&point.id).copied()?;
+            let status = match issues.get(&point.id) {
+                None => "Healthy",
+                Some(kinds)
+                    if kinds.iter().any(|kind| {
+                        matches!(
+                            kind,
+                            ReconciliationIssueKind::MissingEntity
+                                | ReconciliationIssueKind::WrongEntityKind
+                        )
+                    }) =>
+                {
+                    "Missing"
+                }
+                Some(_) => "Modified",
+            };
+            let quality = if point.quality_flags.is_empty() {
+                "OK".to_owned()
+            } else {
+                point
+                    .quality_flags
+                    .iter()
+                    .map(|flag| match flag {
+                        QualityFlag::DuplicateNumber => "Duplicate number",
+                    })
+                    .collect::<Vec<_>>()
+                    .join(", ")
+            };
+            Some(PointManagerRow {
+                id: point.id,
+                entities: linked
+                    .roles()
+                    .into_iter()
+                    .filter_map(|(_, entity)| entity.map(|entity| entity.0))
+                    .collect(),
+                number: point.number.clone(),
+                x: point.position.x(),
+                y: point.position.y(),
+                elevation: point.position.z(),
+                code: point.code.clone().unwrap_or_default(),
+                description: point.description.clone().unwrap_or_default(),
+                quality,
+                status: status.to_owned(),
+            })
+        })
+        .collect::<Vec<_>>();
+    rows.sort_by(|left, right| {
+        compare_point_numbers(&left.number, &right.number).then_with(|| left.id.cmp(&right.id))
+    });
+    let summary = format!(
+        "{} {} · {} healthy · {} missing · {} modified · {} orphaned entities",
+        report.points,
+        if report.points == 1 {
+            "point"
+        } else {
+            "points"
+        },
+        report.healthy_points,
+        report.missing_entities,
+        report.modified_entities,
+        report.orphaned_entities
+    );
+    Ok(PointManagerSnapshot {
+        rows,
+        summary,
+        project_id: report.project_id,
+        points: report.points,
+        healthy_points: report.healthy_points,
+        missing_entities: report.missing_entities,
+        modified_entities: report.modified_entities,
+        orphaned_entities: report.orphaned_entities,
+    })
+}
+
+fn update_managed_points(
+    host: &mut impl CadcraftHost,
+    rows: &[PointManagerEdit],
+) -> Result<PointManagerMutation, AdapterError> {
+    if rows.is_empty() || rows.len() > MAX_MANAGER_MUTATION_POINTS {
+        return Err(AdapterError::new(
+            "validate point edits",
+            HostError::new(format!(
+                "one edit may contain 1 to {MAX_MANAGER_MUTATION_POINTS} points"
+            )),
+            None,
+        ));
+    }
+    let mut stored = required_drawing_project(host)?;
+    let mut edited = BTreeSet::new();
+    for row in rows {
+        if !edited.insert(row.id) {
+            return Err(AdapterError::new(
+                "validate point edits",
+                HostError::new("one point id occurs more than once"),
+                None,
+            ));
+        }
+        let Some(existing) = stored
+            .project
+            .points
+            .iter_mut()
+            .find(|point| point.id == row.id)
+        else {
+            return Err(AdapterError::new(
+                "validate point edits",
+                HostError::new(format!("point id {} is not in this drawing", row.id)),
+                None,
+            ));
+        };
+        let position = point(row.x, row.y, row.elevation)
+            .map_err(|error| AdapterError::new("validate point edits", error, None))?;
+        let code = optional_manager_text(&row.code, MAX_CODE_BYTES, "code")
+            .map_err(|error| AdapterError::new("validate point edits", error, None))?;
+        let description =
+            optional_manager_text(&row.description, MAX_DESCRIPTION_BYTES, "description")
+                .map_err(|error| AdapterError::new("validate point edits", error, None))?;
+        let mut replacement = SurveyPoint::new(
+            existing.id,
+            row.number.clone(),
+            position,
+            code,
+            description,
+            existing.source.clone(),
+        )
+        .map_err(|error| {
+            AdapterError::new(
+                "validate point edits",
+                HostError::new(error.to_string()),
+                None,
+            )
+        })?;
+        replacement.quality_flags = existing.quality_flags.clone();
+        *existing = replacement;
+    }
+    validate_unique_numbers(&stored.project)
+        .map_err(|error| AdapterError::new("validate point edits", error, None))?;
+    mutate_linked_points(host, &mut stored, &edited, "Edit SurveyCraft points")?;
+    Ok(PointManagerMutation {
+        message: mutation_message("Updated", edited.len()),
+        affected: edited.len(),
+        total_points: stored.project.points.len(),
+    })
+}
+
+fn delete_managed_points(
+    host: &mut impl CadcraftHost,
+    ids: &[Uuid],
+) -> Result<PointManagerMutation, AdapterError> {
+    let mut stored = required_drawing_project(host)?;
+    let ids = validated_ids(&stored, ids, MAX_INSERT_POINTS, "delete points")?;
+    let transaction = host
+        .begin_transaction("Delete SurveyCraft points")
+        .map_err(|error| AdapterError::new("begin point deletion", error, None))?;
+    for links in stored
+        .entity_links
+        .iter()
+        .filter(|links| ids.contains(&links.point_id))
+    {
+        for (_, entity) in links.roles() {
+            let Some(entity) = entity else { continue };
+            let exists = host
+                .get_entity(entity)
+                .map_err(|error| rollback_error(host, transaction, "inspect linked entity", error))?
+                .is_some();
+            if exists {
+                host.delete_entity(transaction, entity).map_err(|error| {
+                    rollback_error(host, transaction, "delete linked entity", error)
+                })?;
+            }
+        }
+    }
+    stored
+        .project
+        .points
+        .retain(|point| !ids.contains(&point.id));
+    stored
+        .entity_links
+        .retain(|links| !ids.contains(&links.point_id));
+    persist_and_commit(host, transaction, &stored, "delete points")?;
+    Ok(PointManagerMutation {
+        message: mutation_message("Deleted", ids.len()),
+        affected: ids.len(),
+        total_points: stored.project.points.len(),
+    })
+}
+
+fn synchronize_managed_points(
+    host: &mut impl CadcraftHost,
+    ids: &[Uuid],
+) -> Result<PointManagerMutation, AdapterError> {
+    let mut stored = required_drawing_project(host)?;
+    let ids = validated_ids(
+        &stored,
+        ids,
+        MAX_MANAGER_MUTATION_POINTS,
+        "synchronize points",
+    )?;
+    mutate_linked_points(host, &mut stored, &ids, "Synchronize SurveyCraft points")?;
+    Ok(PointManagerMutation {
+        message: mutation_message("Synchronized", ids.len()),
+        affected: ids.len(),
+        total_points: stored.project.points.len(),
+    })
+}
+
+fn renumber_managed_points(
+    host: &mut impl CadcraftHost,
+    ids: &[Uuid],
+    prefix: &str,
+    start: u64,
+    step: u64,
+) -> Result<PointManagerMutation, AdapterError> {
+    let mut stored = required_drawing_project(host)?;
+    let ids = validated_ids(&stored, ids, MAX_MANAGER_MUTATION_POINTS, "renumber points")?;
+    let prefix = prefix.trim();
+    if prefix.len() > 64 || prefix.chars().any(char::is_control) || step == 0 {
+        return Err(AdapterError::new(
+            "validate point renumbering",
+            HostError::new("prefix must be bounded printable text and step must be positive"),
+            None,
+        ));
+    }
+    let mut ordered_ids = stored
+        .project
+        .points
+        .iter()
+        .filter(|point| ids.contains(&point.id))
+        .map(|point| (point.number.clone(), point.id))
+        .collect::<Vec<_>>();
+    ordered_ids.sort_by(|left, right| {
+        compare_point_numbers(&left.0, &right.0).then_with(|| left.1.cmp(&right.1))
+    });
+    for (index, (_, id)) in ordered_ids.iter().enumerate() {
+        let offset = step
+            .checked_mul(u64::try_from(index).map_err(|_| {
+                AdapterError::new(
+                    "validate point renumbering",
+                    HostError::new("renumber index is too large"),
+                    None,
+                )
+            })?)
+            .and_then(|offset| start.checked_add(offset))
+            .ok_or_else(|| {
+                AdapterError::new(
+                    "validate point renumbering",
+                    HostError::new("renumber sequence overflows"),
+                    None,
+                )
+            })?;
+        let number = format!("{prefix}{offset}");
+        if number.len() > MAX_POINT_NUMBER_BYTES {
+            return Err(AdapterError::new(
+                "validate point renumbering",
+                HostError::new("a generated point number is too long"),
+                None,
+            ));
+        }
+        let Some(point) = stored
+            .project
+            .points
+            .iter_mut()
+            .find(|point| point.id == *id)
+        else {
+            return Err(AdapterError::new(
+                "validate point renumbering",
+                HostError::new("point id is not in this drawing"),
+                None,
+            ));
+        };
+        point.number = number;
+    }
+    validate_unique_numbers(&stored.project)
+        .map_err(|error| AdapterError::new("validate point renumbering", error, None))?;
+    mutate_linked_points(host, &mut stored, &ids, "Renumber SurveyCraft points")?;
+    Ok(PointManagerMutation {
+        message: mutation_message("Renumbered", ids.len()),
+        affected: ids.len(),
+        total_points: stored.project.points.len(),
+    })
+}
+
+fn export_managed_points(
+    host: &mut impl CadcraftHost,
+    ids: &[Uuid],
+) -> Result<PointManagerExport, AdapterError> {
+    let stored = required_drawing_project(host)?;
+    let selected = if ids.is_empty() {
+        BTreeSet::new()
+    } else {
+        validated_ids(&stored, ids, MAX_INSERT_POINTS, "export points")?
+    };
+    let bytes = surveycraft_io::export_point_csv(&stored.project, &selected).map_err(|error| {
+        AdapterError::new("export points", HostError::new(error.to_string()), None)
+    })?;
+    let content = String::from_utf8(bytes).map_err(|error| {
+        AdapterError::new("export points", HostError::new(error.to_string()), None)
+    })?;
+    let points = if selected.is_empty() {
+        stored.project.points.len()
+    } else {
+        selected.len()
+    };
+    commit_read_only(host, "Export SurveyCraft points", "complete point export")?;
+    Ok(PointManagerExport {
+        file_name: "surveycraft-points.csv".into(),
+        content,
+        points,
+    })
+}
+
+fn commit_read_only(
+    host: &mut impl CadcraftHost,
+    label: &str,
+    operation: &'static str,
+) -> Result<(), AdapterError> {
+    let transaction = host
+        .begin_transaction(label)
+        .map_err(|error| AdapterError::new("begin read-only transaction", error, None))?;
+    if let Err(error) = host.commit_transaction(transaction) {
+        let rollback_error = host.rollback_transaction(transaction).err();
+        return Err(AdapterError::new(operation, error, rollback_error));
+    }
+    Ok(())
+}
+
+fn required_drawing_project(
+    host: &mut impl CadcraftHost,
+) -> Result<DrawingSurveyProject, AdapterError> {
+    load_drawing_project(host)?.ok_or_else(|| {
+        AdapterError::new(
+            "load survey project",
+            HostError::new("this drawing has no SurveyCraft point project"),
+            None,
+        )
+    })
+}
+
+fn validated_ids(
+    stored: &DrawingSurveyProject,
+    ids: &[Uuid],
+    maximum: usize,
+    operation: &'static str,
+) -> Result<BTreeSet<Uuid>, AdapterError> {
+    if ids.is_empty() || ids.len() > maximum {
+        return Err(AdapterError::new(
+            operation,
+            HostError::new(format!("the request must contain 1 to {maximum} point ids")),
+            None,
+        ));
+    }
+    let selected = ids.iter().copied().collect::<BTreeSet<_>>();
+    if selected.len() != ids.len() {
+        return Err(AdapterError::new(
+            operation,
+            HostError::new("one point id occurs more than once"),
+            None,
+        ));
+    }
+    if let Some(id) = selected
+        .iter()
+        .find(|id| !stored.project.points.iter().any(|point| point.id == **id))
+    {
+        return Err(AdapterError::new(
+            operation,
+            HostError::new(format!("point id {id} is not in this drawing")),
+            None,
+        ));
+    }
+    Ok(selected)
+}
+
+fn optional_manager_text(
+    value: &str,
+    maximum: usize,
+    field: &str,
+) -> Result<Option<String>, HostError> {
+    let trimmed = value.trim();
+    if trimmed.len() > maximum || trimmed.chars().any(char::is_control) {
+        Err(HostError::new(format!(
+            "{field} must contain at most {maximum} printable bytes"
+        )))
+    } else if trimmed.is_empty() {
+        Ok(None)
+    } else {
+        Ok(Some(trimmed.to_owned()))
+    }
+}
+
+fn validate_unique_numbers(project: &SurveyProject) -> Result<(), HostError> {
+    let mut numbers = BTreeSet::new();
+    for point in &project.points {
+        let folded = point.number.trim().to_lowercase();
+        if folded.is_empty() || !numbers.insert(folded) {
+            return Err(HostError::new(format!(
+                "point number '{}' is empty or duplicated",
+                point.number
+            )));
+        }
+    }
+    Ok(())
+}
+
+fn compare_point_numbers(left: &str, right: &str) -> std::cmp::Ordering {
+    match (left.trim().parse::<i128>(), right.trim().parse::<i128>()) {
+        (Ok(left), Ok(right)) => left.cmp(&right),
+        _ => left.to_lowercase().cmp(&right.to_lowercase()),
+    }
+}
+
+fn mutate_linked_points(
+    host: &mut impl CadcraftHost,
+    stored: &mut DrawingSurveyProject,
+    ids: &BTreeSet<Uuid>,
+    label: &str,
+) -> Result<(), AdapterError> {
+    let transaction = host
+        .begin_transaction(label)
+        .map_err(|error| AdapterError::new("begin point update", error, None))?;
+    for id in ids {
+        synchronize_linked_point(host, transaction, stored, *id)?;
+    }
+    validate_drawing_project(stored)
+        .map_err(|error| rollback_error(host, transaction, "validate updated project", error))?;
+    persist_and_commit(host, transaction, stored, "update points")
+}
+
+fn synchronize_linked_point(
+    host: &mut impl CadcraftHost,
+    transaction: TransactionId,
+    stored: &mut DrawingSurveyProject,
+    point_id: Uuid,
+) -> Result<(), AdapterError> {
+    let point = stored
+        .project
+        .points
+        .iter()
+        .find(|point| point.id == point_id)
+        .cloned()
+        .ok_or_else(|| {
+            rollback_error(
+                host,
+                transaction,
+                "find survey point",
+                HostError::new("point id is not in this drawing"),
+            )
+        })?;
+    let link_index = stored
+        .entity_links
+        .iter()
+        .position(|links| links.point_id == point_id)
+        .ok_or_else(|| {
+            rollback_error(
+                host,
+                transaction,
+                "find point entity links",
+                HostError::new("point has no entity-link record"),
+            )
+        })?;
+    let links = stored
+        .entity_links
+        .get(link_index)
+        .cloned()
+        .ok_or_else(|| {
+            rollback_error(
+                host,
+                transaction,
+                "find point entity links",
+                HostError::new("point link index is invalid"),
+            )
+        })?;
+    let project_id = stored.project.id;
+    let point_request = PointRequest {
+        position: point.position,
+        layer: stored.project.styles.point.layer.clone(),
+    };
+    let point_entity = ensure_point_entity(
+        host,
+        transaction,
+        Some(links.point),
+        &point_request,
+        project_id,
+        point_id,
+    )?;
+    let number_request = label_request(&point, PointEntityRole::NumberLabel, &stored.project)
+        .map_err(|error| rollback_error(host, transaction, "prepare point number", error))?;
+    let number_label = ensure_text_entity(
+        host,
+        transaction,
+        Some(links.number_label),
+        &number_request,
+        project_id,
+        point_id,
+        PointEntityRole::NumberLabel,
+    )?;
+    let elevation_request = label_request(&point, PointEntityRole::ElevationLabel, &stored.project)
+        .map_err(|error| rollback_error(host, transaction, "prepare point elevation", error))?;
+    let elevation_label = ensure_text_entity(
+        host,
+        transaction,
+        Some(links.elevation_label),
+        &elevation_request,
+        project_id,
+        point_id,
+        PointEntityRole::ElevationLabel,
+    )?;
+    let code_label = if point
+        .code
+        .as_deref()
+        .is_some_and(|code| !code.trim().is_empty())
+    {
+        let code_request = label_request(&point, PointEntityRole::CodeLabel, &stored.project)
+            .map_err(|error| rollback_error(host, transaction, "prepare point code", error))?;
+        Some(ensure_text_entity(
+            host,
+            transaction,
+            links.code_label,
+            &code_request,
+            project_id,
+            point_id,
+            PointEntityRole::CodeLabel,
+        )?)
+    } else {
+        if let Some(entity) = links.code_label {
+            delete_if_present(host, transaction, entity)?;
+        }
+        None
+    };
+    let Some(target) = stored.entity_links.get_mut(link_index) else {
+        return Err(rollback_error(
+            host,
+            transaction,
+            "store point entity links",
+            HostError::new("point link index is invalid"),
+        ));
+    };
+    *target = PointEntityLinks {
+        point_id,
+        point: point_entity,
+        number_label,
+        elevation_label,
+        code_label,
+    };
+    Ok(())
+}
+
+fn ensure_point_entity(
+    host: &mut impl CadcraftHost,
+    transaction: TransactionId,
+    existing: Option<EntityId>,
+    request: &PointRequest,
+    project_id: Uuid,
+    point_id: Uuid,
+) -> Result<EntityId, AdapterError> {
+    let entity = match existing {
+        Some(entity) => match host
+            .get_entity(entity)
+            .map_err(|error| rollback_error(host, transaction, "inspect linked point", error))?
+        {
+            Some(view) if view.kind == EntityKind::Point => {
+                host.update_point(transaction, entity, request)
+                    .map_err(|error| {
+                        rollback_error(host, transaction, "update linked point", error)
+                    })?;
+                entity
+            }
+            Some(_) => {
+                host.delete_entity(transaction, entity).map_err(|error| {
+                    rollback_error(host, transaction, "replace linked point", error)
+                })?;
+                create_point_entity(host, transaction, request)?
+            }
+            None => create_point_entity(host, transaction, request)?,
+        },
+        None => create_point_entity(host, transaction, request)?,
+    };
+    tag_entity_if_needed(
+        host,
+        transaction,
+        entity,
+        project_id,
+        point_id,
+        PointEntityRole::Point,
+    )?;
+    Ok(entity)
+}
+
+fn ensure_text_entity(
+    host: &mut impl CadcraftHost,
+    transaction: TransactionId,
+    existing: Option<EntityId>,
+    request: &TextRequest,
+    project_id: Uuid,
+    point_id: Uuid,
+    role: PointEntityRole,
+) -> Result<EntityId, AdapterError> {
+    let entity = match existing {
+        Some(entity) => match host
+            .get_entity(entity)
+            .map_err(|error| rollback_error(host, transaction, "inspect linked label", error))?
+        {
+            Some(view) if view.kind == EntityKind::Text => {
+                host.update_text(transaction, entity, request)
+                    .map_err(|error| {
+                        rollback_error(host, transaction, "update linked label", error)
+                    })?;
+                entity
+            }
+            Some(_) => {
+                host.delete_entity(transaction, entity).map_err(|error| {
+                    rollback_error(host, transaction, "replace linked label", error)
+                })?;
+                create_text_entity(host, transaction, request)?
+            }
+            None => create_text_entity(host, transaction, request)?,
+        },
+        None => create_text_entity(host, transaction, request)?,
+    };
+    tag_entity_if_needed(host, transaction, entity, project_id, point_id, role)?;
+    Ok(entity)
+}
+
+fn tag_entity_if_needed(
+    host: &mut impl CadcraftHost,
+    transaction: TransactionId,
+    entity: EntityId,
+    project_id: Uuid,
+    point_id: Uuid,
+    role: PointEntityRole,
+) -> Result<(), AdapterError> {
+    for (key, value) in [
+        (PROJECT_ID_METADATA_KEY, project_id.to_string()),
+        (POINT_ID_METADATA_KEY, point_id.to_string()),
+        (ROLE_METADATA_KEY, role.metadata_value().to_owned()),
+    ] {
+        let current = host.get_entity_metadata(entity, key).map_err(|error| {
+            rollback_error(host, transaction, "inspect survey entity metadata", error)
+        })?;
+        if current.as_deref() != Some(value.as_str()) {
+            host.set_entity_metadata(transaction, entity, key, &value)
+                .map_err(|error| {
+                    rollback_error(host, transaction, "repair survey entity metadata", error)
+                })?;
+        }
+    }
+    Ok(())
+}
+
+fn delete_if_present(
+    host: &mut impl CadcraftHost,
+    transaction: TransactionId,
+    entity: EntityId,
+) -> Result<(), AdapterError> {
+    let exists = host
+        .get_entity(entity)
+        .map_err(|error| rollback_error(host, transaction, "inspect linked entity", error))?
+        .is_some();
+    if exists {
+        host.delete_entity(transaction, entity)
+            .map_err(|error| rollback_error(host, transaction, "delete linked entity", error))?;
+    }
+    Ok(())
+}
+
+fn label_request(
+    survey_point: &SurveyPoint,
+    role: PointEntityRole,
+    project: &SurveyProject,
+) -> Result<TextRequest, HostError> {
+    let labels = &project.styles.labels;
+    let (position, value, layer) = match role {
+        PointEntityRole::NumberLabel => (
+            point(
+                survey_point.position.x() + labels.offset_x,
+                survey_point.position.y() + labels.offset_y,
+                survey_point.position.z(),
+            ),
+            survey_point.number.clone(),
+            labels.number_layer.clone(),
+        ),
+        PointEntityRole::ElevationLabel => (
+            point(
+                survey_point.position.x() + labels.offset_x,
+                survey_point.position.y() - labels.offset_y,
+                survey_point.position.z(),
+            ),
+            format!(
+                "{:.*}",
+                usize::from(labels.elevation_decimals),
+                survey_point.position.z()
+            ),
+            labels.elevation_layer.clone(),
+        ),
+        PointEntityRole::CodeLabel => (
+            point(
+                survey_point.position.x() + labels.offset_x,
+                survey_point.position.y() - labels.offset_y * 2.4,
+                survey_point.position.z(),
+            ),
+            survey_point.code.clone().unwrap_or_default(),
+            labels.code_layer.clone(),
+        ),
+        PointEntityRole::Point => {
+            return Err(HostError::new("point geometry is not a text label"));
+        }
+    };
+    Ok(TextRequest {
+        position: position?,
+        value,
+        height: labels.height,
+        rotation_degrees: 0.0,
+        layer,
+    })
+}
+
+fn persist_and_commit(
+    host: &mut impl CadcraftHost,
+    transaction: TransactionId,
+    stored: &DrawingSurveyProject,
+    operation: &'static str,
+) -> Result<(), AdapterError> {
+    validate_drawing_project(stored)
+        .map_err(|error| rollback_error(host, transaction, "validate survey project", error))?;
+    let metadata = serde_json::to_string(stored).map_err(|error| {
+        rollback_error(
+            host,
+            transaction,
+            "encode survey project",
+            HostError::new(error.to_string()),
+        )
+    })?;
+    host.set_drawing_metadata(transaction, PROJECT_METADATA_KEY, &metadata)
+        .map_err(|error| rollback_error(host, transaction, "persist survey project", error))?;
+    if let Err(error) = host.commit_transaction(transaction) {
+        let rollback_error = host.rollback_transaction(transaction).err();
+        return Err(AdapterError::new(operation, error, rollback_error));
+    }
+    Ok(())
 }
 
 fn load_drawing_project(
@@ -1316,6 +2227,192 @@ mod tests {
             .find(|entity| entity.kind == EntityKind::Point)
             .and_then(|entity| entity.position);
         assert_eq!(point, Some(Point3::new(200.0, 500.0, 12.5)?));
+        Ok(())
+    }
+
+    #[test]
+    fn point_manager_edits_geometry_labels_and_exports() -> Result<(), Box<dyn Error>> {
+        let mut host = MockHost::default();
+        insert_points(&mut host, &request())?;
+        let listed = manage_points(&mut host, &PointManagerRequest::List)?;
+        let PointManagerResult::Snapshot(snapshot) = listed else {
+            return Err("point manager did not return a snapshot".into());
+        };
+        let Some(row) = snapshot.rows.first() else {
+            return Err("point manager returned no rows".into());
+        };
+        let id = row.id;
+
+        let result = manage_points(
+            &mut host,
+            &PointManagerRequest::Update {
+                rows: vec![PointManagerEdit {
+                    id,
+                    number: "201".into(),
+                    x: 700.0,
+                    y: 300.0,
+                    elevation: 15.25,
+                    code: String::new(),
+                    description: "Edited station".into(),
+                }],
+            },
+        )?;
+        let PointManagerResult::Mutation(mutation) = result else {
+            return Err("point manager did not return a mutation summary".into());
+        };
+        assert_eq!(mutation.affected, 1);
+
+        let listed = manage_points(&mut host, &PointManagerRequest::List)?;
+        let PointManagerResult::Snapshot(snapshot) = listed else {
+            return Err("point manager did not return an updated snapshot".into());
+        };
+        let Some(row) = snapshot.rows.first() else {
+            return Err("updated point manager returned no rows".into());
+        };
+        assert_eq!(row.number, "201");
+        assert_eq!((row.x, row.y, row.elevation), (700.0, 300.0, 15.25));
+        assert_eq!(row.description, "Edited station");
+        assert!(row.code.is_empty());
+        assert_eq!(row.status, "Healthy");
+        assert_eq!(row.entities.len(), 3);
+
+        let exported = manage_points(&mut host, &PointManagerRequest::Export { ids: vec![id] })?;
+        let PointManagerResult::Export(export) = exported else {
+            return Err("point manager did not return an export".into());
+        };
+        assert!(export.content.contains("201,700,300,15.25,,Edited station"));
+        Ok(())
+    }
+
+    #[test]
+    fn point_manager_renumbers_repairs_and_deletes() -> Result<(), Box<dyn Error>> {
+        let mut host = MockHost::default();
+        let mut input = request();
+        input.rows.push(PointRow {
+            number: "102".into(),
+            x: 510.0,
+            y: 210.0,
+            elevation: 13.5,
+            code: "EDGE".into(),
+        });
+        insert_points(&mut host, &input)?;
+        let metadata = host
+            .drawing_metadata
+            .get(PROJECT_METADATA_KEY)
+            .cloned()
+            .ok_or("missing project metadata")?;
+        let stored: DrawingSurveyProject = serde_json::from_str(&metadata)?;
+        let first = stored
+            .entity_links
+            .first()
+            .ok_or("missing first point links")?;
+        let old_number_label = first.number_label;
+        host.entities.remove(&old_number_label);
+
+        manage_points(
+            &mut host,
+            &PointManagerRequest::Synchronize {
+                ids: vec![first.point_id],
+            },
+        )?;
+        let metadata = host
+            .drawing_metadata
+            .get(PROJECT_METADATA_KEY)
+            .cloned()
+            .ok_or("missing repaired metadata")?;
+        let repaired: DrawingSurveyProject = serde_json::from_str(&metadata)?;
+        let repaired_first = repaired
+            .entity_links
+            .first()
+            .ok_or("missing repaired links")?;
+        assert_ne!(repaired_first.number_label, old_number_label);
+        assert_eq!(inspect_project(&mut host)?.healthy_points, 2);
+
+        let ids = repaired
+            .project
+            .points
+            .iter()
+            .map(|point| point.id)
+            .collect::<Vec<_>>();
+        manage_points(
+            &mut host,
+            &PointManagerRequest::Renumber {
+                ids: ids.clone(),
+                prefix: "P-".into(),
+                start: 10,
+                step: 10,
+            },
+        )?;
+        let listed = manage_points(&mut host, &PointManagerRequest::List)?;
+        let PointManagerResult::Snapshot(snapshot) = listed else {
+            return Err("point manager did not return a renumbered snapshot".into());
+        };
+        assert_eq!(
+            snapshot
+                .rows
+                .iter()
+                .map(|row| row.number.as_str())
+                .collect::<Vec<_>>(),
+            ["P-10", "P-20"]
+        );
+
+        let delete_id = *ids.first().ok_or("missing point id")?;
+        manage_points(
+            &mut host,
+            &PointManagerRequest::Delete {
+                ids: vec![delete_id],
+            },
+        )?;
+        let listed = manage_points(&mut host, &PointManagerRequest::List)?;
+        let PointManagerResult::Snapshot(snapshot) = listed else {
+            return Err("point manager did not return a post-delete snapshot".into());
+        };
+        assert_eq!(snapshot.points, 1);
+        assert_eq!(snapshot.healthy_points, 1);
+        Ok(())
+    }
+
+    #[test]
+    fn point_manager_rejects_duplicate_numbers_before_mutation() -> Result<(), Box<dyn Error>> {
+        let mut host = MockHost::default();
+        let mut input = request();
+        input.rows.push(PointRow {
+            number: "102".into(),
+            x: 510.0,
+            y: 210.0,
+            elevation: 13.5,
+            code: String::new(),
+        });
+        insert_points(&mut host, &input)?;
+        let metadata = host
+            .drawing_metadata
+            .get(PROJECT_METADATA_KEY)
+            .cloned()
+            .ok_or("missing project metadata")?;
+        let stored: DrawingSurveyProject = serde_json::from_str(&metadata)?;
+        let second = stored.project.points.get(1).ok_or("missing second point")?;
+        let result = manage_points(
+            &mut host,
+            &PointManagerRequest::Update {
+                rows: vec![PointManagerEdit {
+                    id: second.id,
+                    number: "101".into(),
+                    x: second.position.x(),
+                    y: second.position.y(),
+                    elevation: second.position.z(),
+                    code: String::new(),
+                    description: String::new(),
+                }],
+            },
+        );
+        assert!(result.is_err());
+        assert_eq!(
+            host.events
+                .iter()
+                .filter(|event| **event == "begin")
+                .count(),
+            1
+        );
         Ok(())
     }
 

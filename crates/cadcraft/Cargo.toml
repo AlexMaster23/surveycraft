@@ -12,6 +12,7 @@ serde.workspace = true
 serde_json.workspace = true
 surveycraft-core = { path = "../core" }
 surveycraft-geometry = { path = "../geometry" }
+surveycraft-io = { path = "../io" }
 uuid.workspace = true
 
 [lints]

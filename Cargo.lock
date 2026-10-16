@@ -321,18 +321,19 @@ checksum = "0c790de23124f9ab44544d7ac05d60440adc586479ce501c1d6d7da3cd8c9cf5"
 
 [[package]]
 name = "surveycraft-cadcraft"
-version = "0.2.0"
+version = "0.3.0"
 dependencies = [
  "serde",
  "serde_json",
  "surveycraft-core",
  "surveycraft-geometry",
+ "surveycraft-io",
  "uuid",
 ]
 
 [[package]]
 name = "surveycraft-cli"
-version = "0.2.0"
+version = "0.3.0"
 dependencies = [
  "serde",
  "serde_json",
@@ -343,7 +344,7 @@ dependencies = [
 
 [[package]]
 name = "surveycraft-core"
-version = "0.2.0"
+version = "0.3.0"
 dependencies = [
  "serde",
  "surveycraft-geometry",
@@ -352,7 +353,7 @@ dependencies = [
 
 [[package]]
 name = "surveycraft-extension"
-version = "0.2.0"
+version = "0.3.0"
 dependencies = [
  "serde_json",
  "surveycraft-cadcraft",
@@ -362,14 +363,14 @@ dependencies = [
 
 [[package]]
 name = "surveycraft-geometry"
-version = "0.2.0"
+version = "0.3.0"
 dependencies = [
  "serde",
 ]
 
 [[package]]
 name = "surveycraft-io"
-version = "0.2.0"
+version = "0.3.0"
 dependencies = [
  "csv",
  "serde",
@@ -381,7 +382,7 @@ dependencies = [
 
 [[package]]
 name = "surveycraft-ui-model"
-version = "0.2.0"
+version = "0.3.0"
 dependencies = [
  "serde",
 ]
@@ -587,7 +588,7 @@ dependencies = [
 
 [[package]]
 name = "xtask"
-version = "0.2.0"
+version = "0.3.0"
 dependencies = [
  "wit-component",
  "zip",

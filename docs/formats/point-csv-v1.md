@@ -27,3 +27,11 @@ guesses a unit or transforms coordinates.
 Rows that exceed a field limit are skipped. Files that exceed the input or row limit are rejected.
 Duplicate point numbers are retained for inspection, marked with `duplicate-number`, and reported
 as validation errors.
+
+## Point Manager export
+
+SurveyCraft v0.3 uses the same six canonical columns for deterministic manager export:
+`number,easting,northing,elevation,code,description`. Records are ordered using numeric-aware point
+number comparison, encoded as UTF-8 with CRLF line endings and quoted using RFC 4180 rules. Export
+coordinates are stored CAD X/Easting and CAD Y/Northing values; no import-axis convention is
+reapplied. The native manager limits returned text to 8 MiB.

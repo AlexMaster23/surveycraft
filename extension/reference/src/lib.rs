@@ -16,8 +16,8 @@ mod component {
     };
     use surveycraft_cadcraft::{
         CadcraftHost, EntityId, EntityKind, EntityView, HostError, InsertPointsRequest,
-        LineRequest, PointRequest, TextRequest, TransactionId, insert_points, inspect_project,
-        run_reference_extension,
+        LineRequest, PointManagerRequest, PointRequest, TextRequest, TransactionId, insert_points,
+        inspect_project, manage_points, run_reference_extension,
     };
     use surveycraft_geometry::Point3;
 
@@ -39,6 +39,14 @@ mod component {
                     let result = inspect_project(&mut host).map_err(|error| error.to_string())?;
                     serde_json::to_string(&result)
                         .map_err(|error| format!("cannot encode inspection result: {error}"))
+                }
+                "manage-points" => {
+                    let request: PointManagerRequest = serde_json::from_str(&parameters_json)
+                        .map_err(|error| format!("invalid point manager action: {error}"))?;
+                    let result =
+                        manage_points(&mut host, &request).map_err(|error| error.to_string())?;
+                    serde_json::to_string(&result)
+                        .map_err(|error| format!("cannot encode point manager result: {error}"))
                 }
                 "reference-line" => {
                     let request = LineRequest {

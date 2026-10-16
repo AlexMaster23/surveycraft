@@ -1,8 +1,9 @@
 //! Bounded, deterministic interchange formats for SurveyCraft.
 
-use csv::{ReaderBuilder, StringRecord, Trim};
+use csv::{ReaderBuilder, StringRecord, Terminator, Trim, WriterBuilder};
 use serde::{Deserialize, Serialize};
-use std::collections::BTreeMap;
+use std::cmp::Ordering;
+use std::collections::{BTreeMap, BTreeSet};
 use std::error::Error;
 use std::fmt::{Display, Formatter};
 use surveycraft_core::{
@@ -25,6 +26,7 @@ pub enum IoError {
     Csv(csv::Error),
     Json(serde_json::Error),
     Core(CoreError),
+    UnknownPoint(Uuid),
 }
 
 impl Display for IoError {
@@ -46,6 +48,9 @@ impl Display for IoError {
             Self::Csv(error) => write!(formatter, "CSV error: {error}"),
             Self::Json(error) => write!(formatter, "project JSON error: {error}"),
             Self::Core(error) => write!(formatter, "project validation error: {error}"),
+            Self::UnknownPoint(id) => {
+                write!(formatter, "selected point id {id} is not in the project")
+            }
         }
     }
 }
@@ -264,6 +269,62 @@ pub fn write_report_json(report: &ImportReport) -> Result<Vec<u8>, IoError> {
     Ok(output)
 }
 
+/// Export point CSV v1 in a stable point-number order. An empty selection exports every point.
+pub fn export_point_csv(
+    project: &SurveyProject,
+    selected: &BTreeSet<Uuid>,
+) -> Result<Vec<u8>, IoError> {
+    project.validate()?;
+    if let Some(id) = selected
+        .iter()
+        .find(|id| !project.points.iter().any(|point| point.id == **id))
+    {
+        return Err(IoError::UnknownPoint(*id));
+    }
+    let mut points = project
+        .points
+        .iter()
+        .filter(|point| selected.is_empty() || selected.contains(&point.id))
+        .collect::<Vec<_>>();
+    points.sort_by(|left, right| {
+        compare_point_numbers(&left.number, &right.number)
+            .then_with(|| left.number.cmp(&right.number))
+            .then_with(|| left.id.cmp(&right.id))
+    });
+
+    let mut writer = WriterBuilder::new()
+        .terminator(Terminator::CRLF)
+        .from_writer(Vec::new());
+    writer.write_record([
+        "number",
+        "easting",
+        "northing",
+        "elevation",
+        "code",
+        "description",
+    ])?;
+    for point in points {
+        writer.write_record([
+            point.number.clone(),
+            point.position.x().to_string(),
+            point.position.y().to_string(),
+            point.position.z().to_string(),
+            point.code.clone().unwrap_or_default(),
+            point.description.clone().unwrap_or_default(),
+        ])?;
+    }
+    writer
+        .into_inner()
+        .map_err(|error| IoError::Csv(error.into_error().into()))
+}
+
+fn compare_point_numbers(left: &str, right: &str) -> Ordering {
+    match (left.trim().parse::<i128>(), right.trim().parse::<i128>()) {
+        (Ok(left), Ok(right)) => left.cmp(&right),
+        _ => left.to_lowercase().cmp(&right.to_lowercase()),
+    }
+}
+
 #[derive(Debug, Clone, Copy)]
 struct Columns {
     number: usize,
@@ -416,7 +477,8 @@ impl Diagnostic {
 
 #[cfg(test)]
 mod tests {
-    use super::{CsvImportOptions, import_point_csv, read_project_json};
+    use super::{CsvImportOptions, export_point_csv, import_point_csv, read_project_json};
+    use std::collections::BTreeSet;
     use std::error::Error;
     use surveycraft_core::{Crs, LinearUnit, NumericPolicy, QualityFlag};
     use uuid::Uuid;
@@ -483,6 +545,24 @@ mod tests {
             surveycraft_core::PROJECT_SCHEMA_VERSION
         );
         assert_eq!(project.styles.labels.number_layer, "SC-POINT-NUMBERS");
+        Ok(())
+    }
+
+    #[test]
+    fn exports_selected_points_in_deterministic_number_order() -> Result<(), Box<dyn Error>> {
+        let csv = b"number,easting,northing,elevation,code,description\n10,10,20,30,B,Second\n2,1,2,3,A,First\n";
+        let report = import_point_csv(csv, &options())?;
+        let all = export_point_csv(&report.project, &BTreeSet::new())?;
+        let text = String::from_utf8(all)?;
+        assert_eq!(
+            text,
+            "number,easting,northing,elevation,code,description\r\n2,1,2,3,A,First\r\n10,10,20,30,B,Second\r\n"
+        );
+
+        let selected = BTreeSet::from([report.project.points[0].id]);
+        let one = String::from_utf8(export_point_csv(&report.project, &selected)?)?;
+        assert!(one.contains("10,10,20,30,B,Second"));
+        assert!(!one.contains("2,1,2,3,A,First"));
         Ok(())
     }
 }

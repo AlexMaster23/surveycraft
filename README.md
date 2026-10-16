@@ -9,20 +9,22 @@ ordinary installable extension with its own repository and release package, not 
 and not source code bundled into CADCraft's extension-system pull request.
 
 This repository contains the **Phase 0 engineering foundation** and the working Phase 1 point
-import plus persistent point-identity workflow. The implementation plan is in
+import, persistent point identity and Point Manager workflow. The implementation plan is in
 [BLUEPRINT.md](BLUEPRINT.md), the product parity ledger is in
 [docs/FEATURE_MATRIX.md](docs/FEATURE_MATRIX.md), the versioned release plan is in
 [ROADMAP.md](ROADMAP.md), and the interface specification is in
 [docs/UI_BLUEPRINT.md](docs/UI_BLUEPRINT.md). Released changes are recorded in
 [CHANGELOG.md](CHANGELOG.md).
 
-The working point command opens a native CADCraft table, accepts manually entered or imported
+The point-import command opens a native CADCraft table, accepts manually entered or imported
 coordinates, lets the user choose CAD/GIS or Survey/TopoLT X/Y interpretation, validates the rows,
 and inserts CAD points plus number, elevation and optional code labels. Every logical point and
 its CAD entities receive persistent links, stored styles and reconciliation diagnostics. The whole
-operation is transactional and is removed by one Undo. The schema 2 host is implemented and proven locally on
-CADCraft's `feature/extension-system` working branch; it is not part of a public CADCraft release
-yet.
+operation is transactional and is removed by one Undo. The native Point Manager then filters,
+selects, locates, edits, synchronizes, renumbers, deletes and exports those linked points without
+losing their stable identities. Each write action is one undoable transaction. The schema 2 host is
+implemented and proven locally on CADCraft's `feature/extension-system` working branch; it is not
+part of a public CADCraft release yet.
 
 ## Product promise
 
@@ -70,7 +72,8 @@ the top of the Drafting Tool Sets palette; press **Import and insert points...**
 **SurveyCraft > Points > Import and insert points...**, or type `SCPOINTS`. See
 [docs/POINT_IMPORT.md](docs/POINT_IMPORT.md) for the exact input contract and drawing output.
 Use **Check point links** or `SCCHECKPOINTS` to diagnose CAD entities deleted or edited outside
-SurveyCraft.
+SurveyCraft. Press **Point Manager** or type `SCPOINTMANAGER`/`SCPM` to manage existing points;
+[docs/POINT_MANAGER.md](docs/POINT_MANAGER.md) documents the complete workflow.
 
 ## Core and CLI
 

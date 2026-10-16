@@ -6,7 +6,22 @@ CADCraft host requirements change.
 
 ## Unreleased
 
-- Next target: v0.3.0 Point Manager and round-trip editing.
+- Next target: v0.4.0 coding and feature generation.
+
+## 0.3.0 — 2026-10-16
+
+- Added the native, virtualized Point Manager with filtering and point/link health columns.
+- Added drawing selection and location for managed point entities.
+- Added round-trip editing of number, CAD coordinates, elevation, code and description while
+  preserving stable point UUIDs.
+- Added deterministic batch renumbering and duplicate-number prevention.
+- Added explicit synchronization that repairs missing or externally modified point/label entities.
+- Added linked deletion with two-step UI confirmation.
+- Added deterministic CSV export for all or selected points.
+- Added generic host-rendered extension data managers and host-owned text-file export to CADCraft
+  PR #1384.
+- Verified package installation, save/reopen persistence, repair, editing, renumbering, export and
+  deletion against a real CADCraft drawing.
 
 ## 0.2.0 — 2026-10-16
 

@@ -2,7 +2,7 @@
   "schemaVersion": 2,
   "id": "io.github.alexmaster23.surveycraft",
   "name": "SurveyCraft",
-  "version": "0.2.0",
+  "version": "0.3.0",
   "cadcraft": ">=0.7.0, <1.0.0",
   "description": "Open-source surveying tools for CADCraft.",
   "license": "MIT OR Apache-2.0",
@@ -83,6 +83,87 @@
       }
     },
     {
+      "id": "surveycraft.points.manager",
+      "label": "Point Manager...",
+      "menu": ["SurveyCraft", "Points", "Point Manager..."],
+      "aliases": ["SCPOINTMANAGER", "SCPM"],
+      "params": "{action:'list'|'update'|'delete'|'synchronize'|'renumber'|'export',...} -> manager rows, mutation summary or CSV text",
+      "function": "manage-points",
+      "interactive": false,
+      "ui": {
+        "kind": "manager",
+        "title": "SurveyCraft — Point Manager",
+        "description": "Filter, select, locate and edit the persistent survey points in this drawing. Saving synchronizes point geometry and labels in one undo step.",
+        "accent": "#F47A20",
+        "idKey": "id",
+        "entityIdsKey": "entities",
+        "renumberKey": "number",
+        "allowDelete": true,
+        "allowExport": true,
+        "columns": [
+          {
+            "key": "number",
+            "label": "Point number",
+            "kind": "text",
+            "editable": true,
+            "required": true,
+            "unique": true,
+            "width": 110
+          },
+          {
+            "key": "x",
+            "label": "CAD X / Easting",
+            "kind": "number",
+            "editable": true,
+            "required": true,
+            "width": 130
+          },
+          {
+            "key": "y",
+            "label": "CAD Y / Northing",
+            "kind": "number",
+            "editable": true,
+            "required": true,
+            "width": 130
+          },
+          {
+            "key": "elevation",
+            "label": "Elevation",
+            "kind": "number",
+            "editable": true,
+            "required": true,
+            "width": 110
+          },
+          {
+            "key": "code",
+            "label": "Code",
+            "kind": "text",
+            "editable": true,
+            "width": 120
+          },
+          {
+            "key": "description",
+            "label": "Description",
+            "kind": "text",
+            "editable": true,
+            "width": 180
+          },
+          {
+            "key": "quality",
+            "label": "Quality",
+            "kind": "text",
+            "width": 120
+          },
+          {
+            "key": "status",
+            "label": "Link status",
+            "kind": "text",
+            "width": 110
+          }
+        ]
+      }
+    },
+    {
       "id": "surveycraft.points.check-links",
       "label": "Check point links",
       "menu": ["SurveyCraft", "Points", "Check point links"],
@@ -110,6 +191,11 @@
         {
           "command": "surveycraft.points.import",
           "icon": "import",
+          "size": "large"
+        },
+        {
+          "command": "surveycraft.points.manager",
+          "icon": "table",
           "size": "large"
         },
         {
