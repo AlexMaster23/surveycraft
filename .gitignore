@@ -1,0 +1,6 @@
+/target/
+*.cadcraft-extension
+*.dwg
+*.dxf
+*.tmp
+*.pdb

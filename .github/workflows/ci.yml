@@ -1,0 +1,34 @@
+name: CI
+
+on:
+  pull_request:
+  push:
+    branches: [main]
+
+permissions:
+  contents: read
+
+jobs:
+  rust:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: dtolnay/rust-toolchain@stable
+        with:
+          components: rustfmt, clippy
+          targets: wasm32-unknown-unknown
+      - run: cargo fmt --all -- --check
+      - run: cargo clippy --workspace --all-targets -- -D warnings
+      - run: cargo test --workspace
+      - name: Check portable crates for WebAssembly
+        run: >-
+          cargo check --target wasm32-unknown-unknown
+          -p surveycraft-geometry
+          -p surveycraft-core
+          -p surveycraft-io
+          -p surveycraft-cadcraft
+          -p surveycraft-ui-model
+      - name: Build SurveyCraft WebAssembly extension
+        run: cargo build --release --target wasm32-unknown-unknown -p surveycraft-extension
+      - name: Package SurveyCraft extension
+        run: cargo run -p xtask

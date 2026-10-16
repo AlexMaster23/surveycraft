@@ -1,0 +1,64 @@
+{
+  "schemaVersion": 1,
+  "id": "11111111-1111-4111-8111-111111111111",
+  "name": "Phase 0 Synthetic Survey",
+  "crs": {
+    "authority": null,
+    "code": null,
+    "name": "Local engineering grid"
+  },
+  "linearUnit": "metre",
+  "numericPolicy": {
+    "coordinateTolerance": 1e-8,
+    "distanceTolerance": 1e-6,
+    "areaTolerance": 1e-6,
+    "displayDecimals": 3
+  },
+  "points": [
+    {
+      "id": "1008077a-1888-5df3-ac32-fa3a79efcc31",
+      "number": "1001",
+      "position": {
+        "x": 500000.0,
+        "y": 450000.0,
+        "z": 125.25
+      },
+      "code": "STN",
+      "description": "Control station",
+      "source": {
+        "source": "basic.csv",
+        "row": 2
+      }
+    },
+    {
+      "id": "779028cb-a476-5fac-a865-a3fc5070ed01",
+      "number": "1002",
+      "position": {
+        "x": 500012.5,
+        "y": 450007.25,
+        "z": 124.875
+      },
+      "code": "EP",
+      "description": "Edge of pavement",
+      "source": {
+        "source": "basic.csv",
+        "row": 3
+      }
+    },
+    {
+      "id": "7024feba-4775-5d61-a115-3db1d36daeb7",
+      "number": "1003",
+      "position": {
+        "x": 500020.0,
+        "y": 450015.0,
+        "z": 126.1
+      },
+      "code": "BLD",
+      "description": "Building corner",
+      "source": {
+        "source": "basic.csv",
+        "row": 4
+      }
+    }
+  ]
+}

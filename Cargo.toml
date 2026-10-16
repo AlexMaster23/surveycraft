@@ -1,0 +1,40 @@
+[workspace]
+members = [
+    "apps/surveycraft-cli",
+    "crates/cadcraft",
+    "crates/core",
+    "crates/geometry",
+    "crates/io",
+    "crates/ui-model",
+    "extension/reference",
+    "xtask",
+]
+resolver = "3"
+
+[workspace.package]
+version = "0.1.0"
+edition = "2024"
+rust-version = "1.95"
+license = "MIT OR Apache-2.0"
+repository = "https://github.com/AlexMaster23/surveycraft"
+authors = ["AlexMaster23"]
+
+[workspace.dependencies]
+csv = "1.4"
+serde = { version = "1.0", features = ["derive"] }
+serde_json = "1.0"
+uuid = { version = "1.18", features = ["serde", "v5"] }
+wit-bindgen = "0.63"
+wit-component = "0.262"
+zip = { version = "6", default-features = false, features = ["deflate"] }
+
+[workspace.lints.rust]
+unsafe_code = "deny"
+
+[workspace.lints.clippy]
+expect_used = "deny"
+panic = "deny"
+todo = "deny"
+unimplemented = "deny"
+unreachable = "deny"
+unwrap_used = "deny"

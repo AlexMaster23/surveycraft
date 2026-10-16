@@ -1,0 +1,21 @@
+[package]
+name = "surveycraft-extension"
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+repository.workspace = true
+authors.workspace = true
+publish = false
+
+[lib]
+crate-type = ["cdylib"]
+
+[dependencies]
+wit-bindgen.workspace = true
+serde_json.workspace = true
+surveycraft-cadcraft = { path = "../../crates/cadcraft" }
+surveycraft-geometry = { path = "../../crates/geometry" }
+
+[lints]
+workspace = true

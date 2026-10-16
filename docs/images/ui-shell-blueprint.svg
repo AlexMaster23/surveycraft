@@ -1,0 +1,80 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1440" height="900" viewBox="0 0 1440 900" role="img" aria-labelledby="title desc">
+  <title id="title">SurveyCraft docked workspace blueprint</title>
+  <desc id="desc">A dark CADCraft drawing workspace with an orange SurveyCraft palette, point validation list and terrain contours.</desc>
+  <rect width="1440" height="900" fill="#111317"/>
+  <rect x="0" y="0" width="1440" height="60" fill="#292F39"/>
+  <circle cx="28" cy="30" r="8" fill="#F47A20"/>
+  <text x="50" y="37" fill="#F4EEE4" font-family="Inter, Segoe UI, sans-serif" font-size="22" font-weight="700">CADCraft</text>
+  <text x="176" y="37" fill="#F47A20" font-family="Inter, Segoe UI, sans-serif" font-size="20" font-weight="700">SurveyCraft</text>
+  <text x="1222" y="37" fill="#A9ADB5" font-family="Inter, Segoe UI, sans-serif" font-size="16">EPSG:3844 · metres</text>
+
+  <rect x="0" y="60" width="330" height="804" fill="#20252D"/>
+  <rect x="18" y="80" width="294" height="72" rx="10" fill="#2A303A" stroke="#F47A20" stroke-width="2"/>
+  <circle cx="54" cy="116" r="19" fill="#51D88A"/>
+  <text x="86" y="110" fill="#F4EEE4" font-family="Inter, Segoe UI, sans-serif" font-size="17" font-weight="700">Field Survey 24</text>
+  <text x="86" y="135" fill="#A9ADB5" font-family="Inter, Segoe UI, sans-serif" font-size="13">1,284 points · validated</text>
+
+  <g font-family="Inter, Segoe UI, sans-serif" font-size="16">
+    <rect x="18" y="172" width="294" height="44" rx="8" fill="#F47A20"/>
+    <text x="54" y="200" fill="#111317" font-weight="800">Points</text>
+    <text x="40" y="250" fill="#CDD0D6">Coding &amp; Features</text>
+    <text x="40" y="296" fill="#CDD0D6">Parcels &amp; Areas</text>
+    <text x="40" y="342" fill="#CDD0D6">Terrain &amp; Contours</text>
+    <text x="40" y="388" fill="#CDD0D6">Volumes &amp; Profiles</text>
+    <text x="40" y="434" fill="#CDD0D6">Coordinates &amp; COGO</text>
+    <text x="40" y="480" fill="#CDD0D6">Raster &amp; Georeference</text>
+    <text x="40" y="526" fill="#CDD0D6">Sheets &amp; Export</text>
+  </g>
+
+  <rect x="18" y="566" width="294" height="216" rx="10" fill="#171B21" stroke="#3B424E"/>
+  <text x="36" y="598" fill="#F4EEE4" font-family="Inter, Segoe UI, sans-serif" font-size="16" font-weight="700">Import review</text>
+  <text x="36" y="632" fill="#51D88A" font-family="Inter, Segoe UI, sans-serif" font-size="14">✓ 1,271 ready</text>
+  <text x="36" y="662" fill="#FFB547" font-family="Inter, Segoe UI, sans-serif" font-size="14">△ 11 unknown codes</text>
+  <text x="36" y="692" fill="#F05A67" font-family="Inter, Segoe UI, sans-serif" font-size="14">× 2 duplicate numbers</text>
+  <rect x="36" y="724" width="258" height="40" rx="7" fill="#F47A20"/>
+  <text x="165" y="750" text-anchor="middle" fill="#111317" font-family="Inter, Segoe UI, sans-serif" font-size="14" font-weight="800">REVIEW ISSUES</text>
+
+  <rect x="330" y="60" width="850" height="804" fill="#171B21"/>
+  <g fill="none" stroke="#343B46" stroke-width="1">
+    <path d="M380 60v804M480 60v804M580 60v804M680 60v804M780 60v804M880 60v804M980 60v804M1080 60v804"/>
+    <path d="M330 110h850M330 210h850M330 310h850M330 410h850M330 510h850M330 610h850M330 710h850M330 810h850"/>
+  </g>
+  <g fill="none" stroke="#F47A20" stroke-width="3" opacity="0.9">
+    <path d="M382 218c128-104 250-36 344 8s206 44 398-46"/>
+    <path d="M364 274c134-96 254-34 356 14s224 56 420-30"/>
+    <path d="M362 340c154-88 266-22 368 30s224 58 424-18"/>
+    <path d="M354 416c148-72 270-8 372 42s236 58 434-10"/>
+    <path d="M354 500c150-58 272 2 378 48s232 54 426-6"/>
+  </g>
+  <g fill="#27C2D6" stroke="#111317" stroke-width="5">
+    <circle cx="458" cy="352" r="10"/><circle cx="552" cy="320" r="10"/><circle cx="640" cy="386" r="10"/>
+    <circle cx="748" cy="338" r="10"/><circle cx="842" cy="430" r="10"/><circle cx="952" cy="374" r="10"/>
+    <circle cx="1058" cy="472" r="10"/><circle cx="690" cy="554" r="10"/><circle cx="530" cy="520" r="10"/>
+  </g>
+  <g fill="#F4EEE4" font-family="JetBrains Mono, Consolas, monospace" font-size="12">
+    <text x="472" y="344">P101</text><text x="566" y="312">P102</text><text x="654" y="378">P103</text>
+    <text x="762" y="330">P104</text><text x="856" y="422">P105</text><text x="966" y="366">P106</text>
+  </g>
+  <path d="M458 352 552 320 640 386 748 338 842 430 952 374 1058 472" fill="none" stroke="#27C2D6" stroke-width="3" stroke-dasharray="10 8"/>
+  <rect x="516" y="690" width="476" height="90" rx="12" fill="#20252D" stroke="#F47A20" stroke-width="2"/>
+  <text x="540" y="723" fill="#F4EEE4" font-family="Inter, Segoe UI, sans-serif" font-size="16" font-weight="700">Surface preview</text>
+  <text x="540" y="752" fill="#A9ADB5" font-family="Inter, Segoe UI, sans-serif" font-size="14">2,416 triangles · 0 crossings · boundary valid</text>
+  <rect x="858" y="713" width="110" height="42" rx="7" fill="#F47A20"/>
+  <text x="913" y="740" text-anchor="middle" fill="#111317" font-family="Inter, Segoe UI, sans-serif" font-size="14" font-weight="800">BUILD</text>
+
+  <rect x="1180" y="60" width="260" height="804" fill="#20252D"/>
+  <text x="1202" y="100" fill="#F4EEE4" font-family="Inter, Segoe UI, sans-serif" font-size="17" font-weight="700">Point P104</text>
+  <g font-family="Inter, Segoe UI, sans-serif" font-size="13">
+    <text x="1202" y="142" fill="#8F96A1">Easting</text><text x="1202" y="168" fill="#F4EEE4">581 224.381 m</text>
+    <text x="1202" y="208" fill="#8F96A1">Northing</text><text x="1202" y="234" fill="#F4EEE4">326 980.552 m</text>
+    <text x="1202" y="274" fill="#8F96A1">Elevation</text><text x="1202" y="300" fill="#F4EEE4">104.227 m</text>
+    <text x="1202" y="340" fill="#8F96A1">Code</text><text x="1202" y="366" fill="#27C2D6">BOUNDARY</text>
+    <text x="1202" y="406" fill="#8F96A1">Quality</text><text x="1202" y="432" fill="#51D88A">Validated</text>
+  </g>
+  <rect x="1200" y="476" width="220" height="42" rx="7" fill="#2A303A" stroke="#505867"/>
+  <text x="1310" y="503" text-anchor="middle" fill="#F4EEE4" font-family="Inter, Segoe UI, sans-serif" font-size="14">Edit point</text>
+
+  <rect x="0" y="864" width="1440" height="36" fill="#292F39"/>
+  <text x="18" y="888" fill="#A9ADB5" font-family="JetBrains Mono, Consolas, monospace" font-size="13">SurveyCraft · Ready · 0 errors</text>
+  <text x="1252" y="888" fill="#A9ADB5" font-family="JetBrains Mono, Consolas, monospace" font-size="13">Scale 1:500</text>
+</svg>

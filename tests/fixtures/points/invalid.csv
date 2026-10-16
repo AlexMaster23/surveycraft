@@ -1,0 +1,5 @@
+number,easting,northing,elevation,code,description
+2001,500000.000,450000.000,100.000,STN,First occurrence
+2001,500001.000,450001.000,100.100,STN,Duplicate number
+2003,not-a-number,450002.000,100.200,EP,Invalid easting
+,500003.000,450003.000,100.300,EP,Missing number

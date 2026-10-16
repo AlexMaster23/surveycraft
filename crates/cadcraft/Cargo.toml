@@ -1,0 +1,15 @@
+[package]
+name = "surveycraft-cadcraft"
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+repository.workspace = true
+authors.workspace = true
+
+[dependencies]
+serde.workspace = true
+surveycraft-geometry = { path = "../geometry" }
+
+[lints]
+workspace = true

@@ -1,0 +1,4 @@
+number,easting,northing,elevation,code,description
+1001,500000.000,450000.000,125.250,STN,Control station
+1002,500012.500,450007.250,124.875,EP,Edge of pavement
+1003,500020.000,450015.000,126.100,BLD,Building corner
