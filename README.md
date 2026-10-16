@@ -9,8 +9,9 @@ from its own repository as an installable extension package.
 
 **Developer preview: current SurveyCraft releases require a custom CADCraft build. They do not
 work with official CADCraft v0.7.0.** The required extension host is proposed upstream and has not
-been accepted or released. SurveyCraft v0.4 includes its coding engine, native Code Book manager
-and transactional drawing adapter on the tested custom host. See
+been accepted or released. SurveyCraft v0.4.1 includes its coding engine, native Code Book manager,
+transactional drawing adapter, audited hardening, and native symbol colors, lineweights and solid
+fills on the tested custom host. See
 [host compatibility and the upstream plan](docs/HOST_COMPATIBILITY.md) before installing.
 
 This repository contains the **Phase 0 engineering foundation** and the working Phase 1 point
@@ -34,7 +35,8 @@ part of a public CADCraft release yet.
 
 The native Code Book manager edits exact, prefix and regex mappings, previews unsaved rules against
 the drawing, and stores the validated book with the drawing. **Generate coded features** then
-creates native lines, arcs, circles and the bundled original symbols on mapped layers. Re-running
+creates native lines, arcs, circles and the bundled original symbols on mapped layers, preserving
+their colors, paper lineweights and filled areas. Re-running
 generation replaces the previous coded output transactionally, with stable provenance metadata
 and one Undo step. See [the coding workflow](docs/CODE_BOOK_WORKFLOW.md).
 
@@ -69,8 +71,8 @@ SurveyCraft remains in this standalone project.
 
 ## Build the extension
 
-For development, SurveyCraft v0.4.0 was verified against custom CADCraft host commit
-[`f4b7a97`](https://github.com/AlexMaster23/cadcraft/commit/f4b7a97)
+For development, SurveyCraft v0.4.1 was verified against custom CADCraft host commit
+[`d5684bb`](https://github.com/AlexMaster23/cadcraft/commit/d5684bbcc192c22eec11749976d7c512e3c849a1)
 from PR #1384. The smaller foundation branch alone cannot run it. Build the guest and create the
 installable package with:
 

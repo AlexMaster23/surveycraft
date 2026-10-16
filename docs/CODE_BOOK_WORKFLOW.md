@@ -43,8 +43,10 @@ case-insensitive in the starter book. The complete portable schema is documented
 [formats/code-book-v1.md](formats/code-book-v1.md).
 
 Generation creates native CAD `Line`, `Arc` and `Circle` entities. Symbols from the original,
-attributed SurveyCraft Basic Symbols pack are decomposed into native lines and circles so they
-remain editable. Symbol size follows `plan scale / 1000 × rule scale`; the native command currently
+attributed SurveyCraft Basic Symbols pack are decomposed into editable native lines and circles,
+with closed filled primitives represented by native polygonal `HATCH` entities. Explicit or
+layer-inherited colors and paper lineweights are preserved. Symbol size follows
+`plan scale / 1000 × rule scale`; the native command currently
 uses a 1:1000 plan scale. The programmatic command accepts, for example,
 `{"planScaleDenominator":500}`.
 
@@ -59,8 +61,7 @@ Unknown codes, conflicting matches and degenerate geometry are returned as struc
 The command reports at most 200 diagnostic entries and refuses a plan requiring more than 4,000
 native entities. Errors before commit roll back the transaction, preserving the previous output.
 
-The code-book engine already retains line style and paper-width decisions, but the v0.4 custom-host
-adapter applies native geometry and the mapped layer only. Direct CAD linetype/lineweight mapping,
-reusable block definitions, rendered suffix attributes, a separate layer editor and operations on
-arbitrary non-SurveyCraft geometry are later work. These limitations are explicit; they are not
-claimed as reference-product parity.
+The adapter applies native geometry, mapped layers, colors, paper lineweights and solid fills.
+Direct CAD linetype mapping, reusable block definitions, rendered suffix attributes, a separate
+layer editor and operations on arbitrary non-SurveyCraft geometry are later work. These limitations
+are explicit; they are not claimed as reference-product parity.

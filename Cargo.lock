@@ -368,7 +368,7 @@ checksum = "0c790de23124f9ab44544d7ac05d60440adc586479ce501c1d6d7da3cd8c9cf5"
 
 [[package]]
 name = "surveycraft-cadcraft"
-version = "0.4.0"
+version = "0.4.1"
 dependencies = [
  "serde",
  "serde_json",
@@ -382,7 +382,7 @@ dependencies = [
 
 [[package]]
 name = "surveycraft-cli"
-version = "0.4.0"
+version = "0.4.1"
 dependencies = [
  "serde",
  "serde_json",
@@ -395,7 +395,7 @@ dependencies = [
 
 [[package]]
 name = "surveycraft-coding"
-version = "0.4.0"
+version = "0.4.1"
 dependencies = [
  "regex",
  "serde",
@@ -406,7 +406,7 @@ dependencies = [
 
 [[package]]
 name = "surveycraft-core"
-version = "0.4.0"
+version = "0.4.1"
 dependencies = [
  "serde",
  "surveycraft-geometry",
@@ -415,7 +415,7 @@ dependencies = [
 
 [[package]]
 name = "surveycraft-extension"
-version = "0.4.0"
+version = "0.4.1"
 dependencies = [
  "serde_json",
  "surveycraft-cadcraft",
@@ -425,14 +425,14 @@ dependencies = [
 
 [[package]]
 name = "surveycraft-geometry"
-version = "0.4.0"
+version = "0.4.1"
 dependencies = [
  "serde",
 ]
 
 [[package]]
 name = "surveycraft-io"
-version = "0.4.0"
+version = "0.4.1"
 dependencies = [
  "csv",
  "serde",
@@ -447,7 +447,7 @@ dependencies = [
 
 [[package]]
 name = "surveycraft-symbols"
-version = "0.4.0"
+version = "0.4.1"
 dependencies = [
  "serde",
  "surveycraft-coding",
@@ -458,7 +458,7 @@ dependencies = [
 
 [[package]]
 name = "surveycraft-ui-model"
-version = "0.4.0"
+version = "0.4.1"
 dependencies = [
  "serde",
  "surveycraft-coding",
@@ -717,7 +717,7 @@ dependencies = [
 
 [[package]]
 name = "xtask"
-version = "0.4.0"
+version = "0.4.1"
 dependencies = [
  "serde_json",
  "surveycraft-coding",

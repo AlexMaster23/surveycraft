@@ -2,16 +2,19 @@ use serde::Serialize;
 use std::env;
 use std::error::Error;
 use std::fmt::{Display, Formatter};
-use std::fs;
+use std::fs::{self, File};
+use std::io::Read;
 use std::path::{Path, PathBuf};
-use surveycraft_coding::{CompiledCodeBook, GenerateOptions};
+use surveycraft_coding::{CompiledCodeBook, GenerateOptions, MAX_CODE_BOOK_BYTES};
 use surveycraft_core::{Crs, LinearUnit, NumericPolicy};
 use surveycraft_io::{
-    CodeBookFormat, CsvImportOptions, ImportReport, import_point_csv, read_code_book,
-    read_project_json, read_symbol_pack_json, write_feature_plan_json, write_project_json,
-    write_report_json,
+    CodeBookFormat, CsvImportOptions, ImportReport, MAX_INPUT_BYTES, import_point_csv,
+    read_code_book, read_project_json, read_symbol_pack_json, write_feature_plan_json,
+    write_project_json, write_report_json,
 };
-use surveycraft_symbols::{SymbolAttribution, SymbolCatalog, SymbolDefinition};
+use surveycraft_symbols::{
+    MAX_CATALOG_PACKS, MAX_SYMBOL_PACK_BYTES, SymbolAttribution, SymbolCatalog, SymbolDefinition,
+};
 use uuid::Uuid;
 
 fn main() {
@@ -48,7 +51,7 @@ fn run(arguments: Vec<String>) -> Result<(), CliError> {
             );
         }
         Command::Inspect(path) => {
-            let bytes = fs::read(path)?;
+            let bytes = read_bounded(&path, MAX_INPUT_BYTES)?;
             let project = read_project_json(&bytes)?;
             let summary = ProjectSummary {
                 schema_version: project.schema_version,
@@ -78,7 +81,7 @@ fn run(arguments: Vec<String>) -> Result<(), CliError> {
         }
         Command::CodeBookGenerate(options) => {
             let book = CompiledCodeBook::compile(load_code_book(&options.book)?)?;
-            let project = read_project_json(&fs::read(&options.project)?)?;
+            let project = read_project_json(&read_bounded(&options.project, MAX_INPUT_BYTES)?)?;
             let plan = book.generate_features(
                 project.id,
                 &project.points,
@@ -148,6 +151,8 @@ enum CliError {
     Utf8(std::str::Utf8Error),
     InvalidUuid(uuid::Error),
     ValidationFailed(usize),
+    InputTooLarge { path: PathBuf, maximum: usize },
+    TooManySymbolPacks { actual: usize, maximum: usize },
 }
 
 impl Display for CliError {
@@ -169,6 +174,15 @@ impl Display for CliError {
                     "validation found {count} error(s); no project was written"
                 )
             }
+            Self::InputTooLarge { path, maximum } => write!(
+                formatter,
+                "input '{}' exceeds the {maximum}-byte safety limit",
+                path.display()
+            ),
+            Self::TooManySymbolPacks { actual, maximum } => write!(
+                formatter,
+                "symbol catalog contains {actual} pack paths; the safety limit is {maximum}"
+            ),
         }
     }
 }
@@ -443,7 +457,7 @@ fn default_project_name(path: &Path) -> String {
 }
 
 fn load_csv(options: &CsvOptions) -> Result<ImportReport, CliError> {
-    let bytes = fs::read(&options.input)?;
+    let bytes = read_bounded(&options.input, MAX_INPUT_BYTES)?;
     let source_name = options
         .input
         .file_name()
@@ -477,15 +491,46 @@ fn load_code_book(path: &Path) -> Result<surveycraft_coding::CodeBook, CliError>
             ));
         }
     };
-    Ok(read_code_book(&fs::read(path)?, format)?)
+    Ok(read_code_book(
+        &read_bounded(path, MAX_CODE_BOOK_BYTES)?,
+        format,
+    )?)
 }
 
 fn load_symbol_catalog(paths: &[PathBuf]) -> Result<SymbolCatalog, CliError> {
+    if paths.len() > MAX_CATALOG_PACKS {
+        return Err(CliError::TooManySymbolPacks {
+            actual: paths.len(),
+            maximum: MAX_CATALOG_PACKS,
+        });
+    }
     let packs = paths
         .iter()
-        .map(|path| Ok(read_symbol_pack_json(&fs::read(path)?)?))
+        .map(|path| {
+            Ok(read_symbol_pack_json(&read_bounded(
+                path,
+                MAX_SYMBOL_PACK_BYTES,
+            )?)?)
+        })
         .collect::<Result<Vec<_>, CliError>>()?;
     Ok(SymbolCatalog::compile(packs)?)
+}
+
+fn read_bounded(path: &Path, maximum: usize) -> Result<Vec<u8>, CliError> {
+    read_bounded_from(File::open(path)?, path, maximum)
+}
+
+fn read_bounded_from(reader: impl Read, path: &Path, maximum: usize) -> Result<Vec<u8>, CliError> {
+    let limit = u64::try_from(maximum).unwrap_or(u64::MAX).saturating_add(1);
+    let mut bytes = Vec::with_capacity(maximum.min(64 * 1024));
+    reader.take(limit).read_to_end(&mut bytes)?;
+    if bytes.len() > maximum {
+        return Err(CliError::InputTooLarge {
+            path: path.to_path_buf(),
+            maximum,
+        });
+    }
+    Ok(bytes)
 }
 
 fn print_utf8(bytes: &[u8]) -> Result<(), CliError> {
@@ -529,9 +574,20 @@ struct SymbolDetails {
 
 #[cfg(test)]
 mod tests {
-    use super::{Command, parse_command};
+    use super::{CliError, Command, parse_command, read_bounded_from};
     use std::error::Error;
+    use std::io::Cursor;
+    use std::path::Path;
     use uuid::Uuid;
+
+    #[test]
+    fn bounded_reader_stops_after_the_declared_limit() {
+        let error = read_bounded_from(Cursor::new(vec![0_u8; 9]), Path::new("large.bin"), 8).err();
+        assert!(matches!(
+            error,
+            Some(CliError::InputTooLarge { maximum: 8, .. })
+        ));
+    }
 
     #[test]
     fn parses_import_options() -> Result<(), Box<dyn Error>> {

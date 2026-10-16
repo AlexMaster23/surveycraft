@@ -2,7 +2,7 @@
   "schemaVersion": 2,
   "id": "io.github.alexmaster23.surveycraft",
   "name": "SurveyCraft",
-  "version": "0.4.0",
+  "version": "0.4.1",
   "cadcraft": ">=0.7.0, <1.0.0",
   "description": "Open-source surveying tools for CADCraft.",
   "license": "MIT OR Apache-2.0",

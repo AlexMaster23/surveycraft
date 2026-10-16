@@ -12,14 +12,17 @@ mod component {
     use cadcraft::extension::drawing;
     use cadcraft::extension::geometry::{
         ArcRequest as WitArcRequest, CircleRequest as WitCircleRequest,
-        EntityKind as WitEntityKind, EntityView as WitEntityView, LineRequest as WitLineRequest,
-        Point3 as WitPoint3, PointRequest as WitPointRequest, TextRequest as WitTextRequest,
+        EntityAppearance as WitEntityAppearance, EntityKind as WitEntityKind,
+        EntityView as WitEntityView, LineRequest as WitLineRequest, Point3 as WitPoint3,
+        PointRequest as WitPointRequest, SolidFillRequest as WitSolidFillRequest,
+        TextRequest as WitTextRequest,
     };
     use surveycraft_cadcraft::{
-        ArcRequest, CadcraftHost, CircleRequest, CodeBookManagerRequest, EntityId, EntityKind,
-        EntityView, GenerateCodedFeaturesRequest, HostError, InsertPointsRequest, LineRequest,
-        PointManagerRequest, PointRequest, TextRequest, TransactionId, generate_coded_features,
-        insert_points, inspect_project, manage_code_book, manage_points, run_reference_extension,
+        ArcRequest, CadcraftHost, CircleRequest, CodeBookManagerRequest, EntityAppearance,
+        EntityId, EntityKind, EntityView, GenerateCodedFeaturesRequest, HostError,
+        InsertPointsRequest, LineRequest, PointManagerRequest, PointRequest, SolidFillRequest,
+        TextRequest, TransactionId, generate_coded_features, insert_points, inspect_project,
+        manage_code_book, manage_points, run_reference_extension,
     };
     use surveycraft_geometry::Point3;
 
@@ -153,6 +156,34 @@ mod component {
             drawing::create_circle(transaction.0, &request)
                 .map(EntityId)
                 .map_err(host_error)
+        }
+
+        fn create_solid_fill(
+            &mut self,
+            transaction: TransactionId,
+            request: &SolidFillRequest,
+        ) -> Result<EntityId, HostError> {
+            let request = WitSolidFillRequest {
+                boundary: request.boundary.iter().copied().map(wit_point).collect(),
+                layer: request.layer.clone(),
+                color: request.color.clone(),
+            };
+            drawing::create_solid_fill(transaction.0, &request)
+                .map(EntityId)
+                .map_err(host_error)
+        }
+
+        fn set_entity_appearance(
+            &mut self,
+            transaction: TransactionId,
+            entity: EntityId,
+            appearance: &EntityAppearance,
+        ) -> Result<(), HostError> {
+            let appearance = WitEntityAppearance {
+                color: appearance.color.clone(),
+                lineweight_mm: appearance.lineweight_mm,
+            };
+            drawing::set_entity_appearance(transaction.0, entity.0, &appearance).map_err(host_error)
         }
 
         fn create_text(

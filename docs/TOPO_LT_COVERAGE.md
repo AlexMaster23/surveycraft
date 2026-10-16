@@ -283,6 +283,7 @@ Full workflow coverage cannot be claimed until every row has:
 
 ## Next audit slice
 
-The next coding pass should add native linetype/lineweight application, reusable symbol blocks and
-rendered suffix attributes after the accepted CADCraft host API can express them. Black-box
-reference comparisons remain required before any parity claim.
+The next coding pass should add native linetype application, reusable symbol blocks and rendered
+suffix attributes after the accepted CADCraft host API can express them. Native color, paper
+lineweight and polygonal solid fills are implemented on the paired custom host. Black-box reference
+comparisons remain required before any parity claim.

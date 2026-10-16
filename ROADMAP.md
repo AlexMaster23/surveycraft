@@ -25,7 +25,8 @@ supported stable workflow set, not an automatic declaration of complete TopoLT p
 
 ## Current priority: v0.5 and official CADCraft host support
 
-The complete v0.4 workflow is available for development with the tested custom CADCraft host.
+The complete v0.4.1 workflow is available for development with the tested custom CADCraft host,
+including the codebase-audit fixes and exact symbol appearance.
 Official CADCraft releases still do not provide the required extension runtime, drawing API or
 native manager UI. v0.5 engine work can proceed while the extension-host proposal receives
 upstream review. See [HOST_COMPATIBILITY.md](docs/HOST_COMPATIBILITY.md) for the exact tested pairing
@@ -39,6 +40,7 @@ and staged review plan.
 | [v0.2.0](https://github.com/AlexMaster23/surveycraft/releases/tag/v0.2.0) | Phase 1 | Released | Persist stable survey-point identities and CAD entity links across save/reopen. |
 | [v0.3.0](https://github.com/AlexMaster23/surveycraft/releases/tag/v0.3.0) | Phase 1 | Released | Manage, edit, renumber, delete, select, locate, repair and export existing survey points. |
 | [v0.4.0](https://github.com/AlexMaster23/surveycraft/releases/tag/v0.4.0) | Phase 1 | Released | Edit and preview open code-book rules, then generate native coded lines, arcs, circles and original symbols. |
+| [v0.4.1](https://github.com/AlexMaster23/surveycraft/releases/tag/v0.4.1) | Phase 1 maintenance | Released | Harden limits and identity handling, correct large-coordinate geometry, and preserve symbol colors, lineweights and fills. |
 | v0.5.0 | Phase 1 beta | Planned | Diagnose point quality and provide the first practical COGO tool set. |
 | v0.6.0 | Phase 2 | Planned | Discover and validate parcels; create linked area/perimeter labels and tables. |
 | v0.7.0 | Phase 2 | Planned | Divide parcels to exact target areas and export parcel/room reports. |
@@ -99,6 +101,18 @@ Released with the strict JSON/TOML format, deterministic matcher and diagnostics
 Book manager, original attributed six-symbol pack, and transactional native line/arc/circle/symbol
 generation. Generated entities retain stable feature, rule and source-point metadata and are
 replaced deterministically by the next generation run.
+
+### v0.4.1 — audit stabilization (released)
+
+- bounded file reads, code-matching work and drawing-backed project size;
+- atomic code-book ID edits and correct selected-rule export;
+- collision-free point identities after renumbering and point-number reuse;
+- stable three-point circles at real-world survey coordinate magnitudes;
+- native color, lineweight and solid-fill output for coded geometry and symbols;
+- regression tests for every fixed audit finding.
+
+Exit: the full repository gate and the paired CADCraft host tests pass, and the installable package
+reproduces the corrected appearance without weakening transaction or input limits.
 
 ### v0.5.0 — point quality and COGO beta
 

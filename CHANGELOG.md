@@ -8,6 +8,18 @@ CADCraft host requirements change.
 
 - Next target: v0.5.0 point quality and COGO beta.
 
+## 0.4.1 — 2026-10-16
+
+- Stabilized large-world-coordinate three-point circles by solving in a translated local frame.
+- Made code-book rule-ID swaps atomic, enforced editor/export bounds, and made selected export honor
+  the requested rule IDs.
+- Prevented point-entity UUID reuse after renumbering and capped drawing-backed point projects before
+  opening native managers or committing imports.
+- Added bounded CLI reads and shared code-matching work budgets for hostile or oversized input.
+- Added native entity colors, paper lineweights and polygonal solid fills through the paired
+  CADCraft host, so symbol appearance is no longer silently discarded.
+- Added regression coverage for every corrected audit finding.
+
 ## 0.4.0 — 2026-10-16
 
 - Added a bounded CAD-independent code-book engine with exact, prefix and regular-expression

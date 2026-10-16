@@ -256,8 +256,36 @@ pub fn manage_code_book(
                 affected: removed,
             }))
         }
-        CodeBookManagerRequest::Export { ids: _ } => {
-            let book = load_code_book(host)?;
+        CodeBookManagerRequest::Export { ids } => {
+            if ids.len() > MAX_RULE_EDITS {
+                return Err(AdapterError::new(
+                    "export code book",
+                    HostError::new(format!(
+                        "the request cannot contain more than {MAX_RULE_EDITS} rule ids"
+                    )),
+                    None,
+                ));
+            }
+            let mut book = load_code_book(host)?;
+            if !ids.is_empty() {
+                let selected = ids.iter().map(|id| id.trim()).collect::<BTreeSet<_>>();
+                if selected.len() != ids.len() {
+                    return Err(AdapterError::new(
+                        "export code book",
+                        HostError::new("a code-rule id occurs more than once"),
+                        None,
+                    ));
+                }
+                book.rules
+                    .retain(|rule| selected.contains(rule.id.as_str()));
+                if book.rules.len() != selected.len() {
+                    return Err(AdapterError::new(
+                        "export code book",
+                        HostError::new("one or more code-rule ids do not exist"),
+                        None,
+                    ));
+                }
+            }
             let bytes = write_code_book_json(&book).map_err(|error| {
                 AdapterError::new("export code book", HostError::new(error.to_string()), None)
             })?;
@@ -352,7 +380,7 @@ pub fn generate_coded_features(
         .collect::<BTreeMap<_, _>>();
     let mut created = 0usize;
     for path in &plan.paths {
-        let layer = drawing_layer(&book, path.layer.as_deref());
+        let (layer, layer_color) = drawing_layer_appearance(&book, path.layer.as_deref());
         for segment in &path.segments {
             let (entity, source_ids) = match segment {
                 FeatureSegment::Line { start, end } => {
@@ -414,6 +442,14 @@ pub fn generate_coded_features(
                     (entity, vec![*start, *through, *end])
                 }
             };
+            apply_entity_appearance(
+                host,
+                transaction,
+                entity,
+                layer_color.clone(),
+                Some(path.paper_width_mm),
+                "style coded path",
+            )?;
             tag_generated_entity(
                 host,
                 transaction,
@@ -440,16 +476,20 @@ pub fn generate_coded_features(
                 HostError::new("circle plan does not contain three points"),
             ));
         };
-        let request = circle_request(
-            *first,
-            *second,
-            *third,
-            drawing_layer(&book, circle.layer.as_deref()),
-        )
-        .map_err(|error| rollback_error(host, transaction, "prepare coded circle", error))?;
+        let (layer, layer_color) = drawing_layer_appearance(&book, circle.layer.as_deref());
+        let request = circle_request(*first, *second, *third, layer)
+            .map_err(|error| rollback_error(host, transaction, "prepare coded circle", error))?;
         let entity = host
             .create_circle(transaction, &request)
             .map_err(|error| rollback_error(host, transaction, "create coded circle", error))?;
+        apply_entity_appearance(
+            host,
+            transaction,
+            entity,
+            layer_color,
+            Some(circle.paper_width_mm),
+            "style coded circle",
+        )?;
         tag_generated_entity(
             host,
             transaction,
@@ -474,9 +514,15 @@ pub fn generate_coded_features(
                     HostError::new(error.to_string()),
                 )
             })?;
-        let layer = drawing_layer(&book, symbol.layer.as_deref());
+        let (layer, layer_color) = drawing_layer_appearance(&book, symbol.layer.as_deref());
         for primitive in &placed.primitives {
-            let entities = create_symbol_primitive(host, transaction, primitive, &layer)?;
+            let entities = create_symbol_primitive(
+                host,
+                transaction,
+                primitive,
+                &layer,
+                layer_color.as_deref(),
+            )?;
             for entity in entities {
                 tag_generated_entity(
                     host,
@@ -590,20 +636,38 @@ fn replace_rules(book: &CodeBook, rows: &[CodeRuleEdit]) -> Result<CodeBook, Hos
 }
 
 fn apply_rule_edits(book: &mut CodeBook, rows: &[CodeRuleEdit]) -> Result<(), HostError> {
+    let existing_ids = book
+        .rules
+        .iter()
+        .map(|rule| rule.id.as_str())
+        .collect::<BTreeSet<_>>();
+    let mut replacements = BTreeMap::new();
+    let mut additions = Vec::new();
     for edit in rows {
         let rule = rule_from_edit(edit)?;
         if edit.record.starts_with("__cadcraft_new_") {
-            book.rules.push(rule);
+            additions.push(rule);
         } else {
-            let Some(existing) = book.rules.iter_mut().find(|item| item.id == edit.record) else {
+            if !existing_ids.contains(edit.record.as_str()) {
                 return Err(HostError::new(format!(
                     "code rule '{}' does not exist",
                     edit.record
                 )));
-            };
-            *existing = rule;
+            }
+            if replacements.insert(edit.record.clone(), rule).is_some() {
+                return Err(HostError::new(format!(
+                    "code rule '{}' occurs more than once in the edit request",
+                    edit.record
+                )));
+            }
         }
     }
+    for existing in &mut book.rules {
+        if let Some(replacement) = replacements.remove(&existing.id) {
+            *existing = replacement;
+        }
+    }
+    book.rules.extend(additions);
     Ok(())
 }
 
@@ -691,24 +755,28 @@ fn code_book_snapshot(
     let mut matches = BTreeMap::<String, usize>::new();
     let mut warnings = 0usize;
     let mut errors = 0usize;
-    let mut coded_points = 0usize;
     let mut diagnostic_examples = Vec::new();
-    for point in &points {
-        let Some(code) = point
-            .code
-            .as_deref()
-            .filter(|value| !value.trim().is_empty())
-        else {
-            continue;
-        };
-        coded_points = coded_points.saturating_add(1);
-        let interpretation = compiled.interpret_code(code).map_err(|error| {
+    let coded = points
+        .iter()
+        .filter_map(|point| {
+            point
+                .code
+                .as_deref()
+                .filter(|value| !value.trim().is_empty())
+                .map(|code| (point.number.as_str(), code))
+        })
+        .collect::<Vec<_>>();
+    let interpretations = compiled
+        .interpret_codes(coded.iter().map(|(_, code)| *code))
+        .map_err(|error| {
             AdapterError::new(
                 "preview point code",
                 HostError::new(error.to_string()),
                 None,
             )
         })?;
+    let coded_points = coded.len();
+    for ((point_number, _), interpretation) in coded.into_iter().zip(interpretations) {
         for matched in interpretation.matches {
             *matches.entry(matched.rule_id).or_default() += 1;
         }
@@ -718,7 +786,7 @@ fn code_book_snapshot(
                 DiagnosticSeverity::Error => errors = errors.saturating_add(1),
             }
             if diagnostic_examples.len() < 3 {
-                diagnostic_examples.push(format!("{}: {}", point.number, diagnostic.message));
+                diagnostic_examples.push(format!("{point_number}: {}", diagnostic.message));
             }
         }
     }
@@ -783,10 +851,13 @@ fn code_book_snapshot(
     Ok(CodeBookManagerSnapshot { rows, summary })
 }
 
-fn drawing_layer(book: &CodeBook, layer_id: Option<&str>) -> String {
+fn drawing_layer_appearance(book: &CodeBook, layer_id: Option<&str>) -> (String, Option<String>) {
     layer_id
         .and_then(|id| book.layers.iter().find(|layer| layer.id == id))
-        .map_or_else(|| "0".to_owned(), |layer| layer.name.clone())
+        .map_or_else(
+            || ("0".to_owned(), None),
+            |layer| (layer.name.clone(), layer.color.clone()),
+        )
 }
 
 fn required_position(positions: &BTreeMap<Uuid, Point3>, id: Uuid) -> Result<Point3, AdapterError> {
@@ -852,21 +923,28 @@ fn arc_request(
 }
 
 fn circumcircle(first: Point3, second: Point3, third: Point3) -> Result<(Point3, f64), HostError> {
-    let ax = first.x();
-    let ay = first.y();
-    let bx = second.x();
-    let by = second.y();
-    let cx = third.x();
-    let cy = third.y();
-    let determinant = 2.0 * (ax * (by - cy) + bx * (cy - ay) + cx * (ay - by));
-    if !determinant.is_finite() || determinant.abs() <= 1.0e-12 {
+    // Work in a local frame. Squaring absolute survey coordinates loses the small differences
+    // that define short-radius curves through large Easting/Northing values.
+    let bx = second.x() - first.x();
+    let by = second.y() - first.y();
+    let cx = third.x() - first.x();
+    let cy = third.y() - first.y();
+    let determinant = 2.0 * bx.mul_add(cy, -(cx * by));
+    let scale = bx.hypot(by).max(cx.hypot(cy)).max((bx - cx).hypot(by - cy));
+    let degeneracy_threshold = 16.0 * f64::EPSILON * scale * scale;
+    if !determinant.is_finite()
+        || !scale.is_finite()
+        || scale <= 0.0
+        || determinant.abs() <= degeneracy_threshold
+    {
         return Err(HostError::new("three-point curve is degenerate"));
     }
-    let a2 = ax.mul_add(ax, ay * ay);
     let b2 = bx.mul_add(bx, by * by);
     let c2 = cx.mul_add(cx, cy * cy);
-    let x = (a2 * (by - cy) + b2 * (cy - ay) + c2 * (ay - by)) / determinant;
-    let y = (a2 * (cx - bx) + b2 * (ax - cx) + c2 * (bx - ax)) / determinant;
+    let local_x = b2.mul_add(cy, -(c2 * by)) / determinant;
+    let local_y = c2.mul_add(bx, -(b2 * cx)) / determinant;
+    let x = first.x() + local_x;
+    let y = first.y() + local_y;
     let z = (first.z() + second.z() + third.z()) / 3.0;
     let center = Point3::new(x, y, z).map_err(|error| HostError::new(error.to_string()))?;
     let radius = center.xy().distance_to(first.xy());
@@ -892,33 +970,94 @@ fn create_symbol_primitive(
     transaction: TransactionId,
     primitive: &PlacedPrimitive,
     layer: &str,
+    inherited_color: Option<&str>,
 ) -> Result<Vec<EntityId>, AdapterError> {
     match primitive {
-        PlacedPrimitive::Line { from, to, .. } => host
-            .create_line(
+        PlacedPrimitive::Line {
+            from,
+            to,
+            stroke_width_mm,
+            color,
+        } => {
+            let entity = host
+                .create_line(
+                    transaction,
+                    &LineRequest {
+                        start: *from,
+                        end: *to,
+                        layer: layer.to_owned(),
+                    },
+                )
+                .map_err(|error| rollback_error(host, transaction, "create symbol line", error))?;
+            apply_entity_appearance(
+                host,
                 transaction,
-                &LineRequest {
-                    start: *from,
-                    end: *to,
-                    layer: layer.to_owned(),
-                },
-            )
-            .map(|entity| vec![entity])
-            .map_err(|error| rollback_error(host, transaction, "create symbol line", error)),
-        PlacedPrimitive::Circle { center, radius, .. } => host
-            .create_circle(
+                entity,
+                effective_color(color.as_deref(), inherited_color),
+                Some(*stroke_width_mm),
+                "style symbol line",
+            )?;
+            Ok(vec![entity])
+        }
+        PlacedPrimitive::Circle {
+            center,
+            radius,
+            stroke_width_mm,
+            filled,
+            color,
+        } => {
+            let entity = host
+                .create_circle(
+                    transaction,
+                    &CircleRequest {
+                        center: *center,
+                        radius: *radius,
+                        layer: layer.to_owned(),
+                    },
+                )
+                .map_err(|error| {
+                    rollback_error(host, transaction, "create symbol circle", error)
+                })?;
+            let color = effective_color(color.as_deref(), inherited_color);
+            apply_entity_appearance(
+                host,
                 transaction,
-                &CircleRequest {
-                    center: *center,
-                    radius: *radius,
-                    layer: layer.to_owned(),
-                },
-            )
-            .map(|entity| vec![entity])
-            .map_err(|error| rollback_error(host, transaction, "create symbol circle", error)),
-        PlacedPrimitive::Polyline { points, closed, .. } => {
+                entity,
+                color.clone(),
+                Some(*stroke_width_mm),
+                "style symbol circle",
+            )?;
+            let mut entities = vec![entity];
+            if *filled {
+                let boundary = circle_fill_boundary(*center, *radius).map_err(|error| {
+                    rollback_error(host, transaction, "prepare symbol circle fill", error)
+                })?;
+                let fill = host
+                    .create_solid_fill(
+                        transaction,
+                        &SolidFillRequest {
+                            boundary,
+                            layer: layer.to_owned(),
+                            color,
+                        },
+                    )
+                    .map_err(|error| {
+                        rollback_error(host, transaction, "create symbol circle fill", error)
+                    })?;
+                entities.push(fill);
+            }
+            Ok(entities)
+        }
+        PlacedPrimitive::Polyline {
+            points,
+            closed,
+            stroke_width_mm,
+            filled,
+            color,
+        } => {
             let pair_count = points.len().saturating_sub(1) + usize::from(*closed);
-            let mut entities = Vec::with_capacity(pair_count);
+            let mut entities = Vec::with_capacity(pair_count.saturating_add(usize::from(*filled)));
+            let color = effective_color(color.as_deref(), inherited_color);
             for pair in points.windows(2) {
                 let Some(start) = pair.first().copied() else {
                     continue;
@@ -926,8 +1065,8 @@ fn create_symbol_primitive(
                 let Some(end) = pair.get(1).copied() else {
                     continue;
                 };
-                entities.push(
-                    host.create_line(
+                let entity = host
+                    .create_line(
                         transaction,
                         &LineRequest {
                             start,
@@ -937,14 +1076,22 @@ fn create_symbol_primitive(
                     )
                     .map_err(|error| {
                         rollback_error(host, transaction, "create symbol polyline", error)
-                    })?,
-                );
+                    })?;
+                apply_entity_appearance(
+                    host,
+                    transaction,
+                    entity,
+                    color.clone(),
+                    Some(*stroke_width_mm),
+                    "style symbol polyline",
+                )?;
+                entities.push(entity);
             }
             if *closed
                 && let (Some(first), Some(last)) = (points.first().copied(), points.last().copied())
             {
-                entities.push(
-                    host.create_line(
+                let entity = host
+                    .create_line(
                         transaction,
                         &LineRequest {
                             start: last,
@@ -954,12 +1101,73 @@ fn create_symbol_primitive(
                     )
                     .map_err(|error| {
                         rollback_error(host, transaction, "close symbol polyline", error)
-                    })?,
-                );
+                    })?;
+                apply_entity_appearance(
+                    host,
+                    transaction,
+                    entity,
+                    color.clone(),
+                    Some(*stroke_width_mm),
+                    "style closed symbol polyline",
+                )?;
+                entities.push(entity);
+            }
+            if *filled {
+                let fill = host
+                    .create_solid_fill(
+                        transaction,
+                        &SolidFillRequest {
+                            boundary: points.clone(),
+                            layer: layer.to_owned(),
+                            color,
+                        },
+                    )
+                    .map_err(|error| {
+                        rollback_error(host, transaction, "fill symbol polyline", error)
+                    })?;
+                entities.push(fill);
             }
             Ok(entities)
         }
     }
+}
+
+fn effective_color(explicit: Option<&str>, inherited: Option<&str>) -> Option<String> {
+    explicit.or(inherited).map(str::to_owned)
+}
+
+fn apply_entity_appearance(
+    host: &mut impl CadcraftHost,
+    transaction: TransactionId,
+    entity: EntityId,
+    color: Option<String>,
+    lineweight_mm: Option<f64>,
+    operation: &'static str,
+) -> Result<(), AdapterError> {
+    host.set_entity_appearance(
+        transaction,
+        entity,
+        &EntityAppearance {
+            color,
+            lineweight_mm,
+        },
+    )
+    .map_err(|error| rollback_error(host, transaction, operation, error))
+}
+
+fn circle_fill_boundary(center: Point3, radius: f64) -> Result<Vec<Point3>, HostError> {
+    const SEGMENTS: usize = 32;
+    (0..SEGMENTS)
+        .map(|index| {
+            let angle = std::f64::consts::TAU * index as f64 / SEGMENTS as f64;
+            Point3::new(
+                center.x() + radius * angle.cos(),
+                center.y() + radius * angle.sin(),
+                center.z(),
+            )
+            .map_err(|error| HostError::new(error.to_string()))
+        })
+        .collect()
 }
 
 fn tag_generated_entity(
@@ -1026,10 +1234,14 @@ fn projected_entity_count(
             })?;
         for primitive in &placed.primitives {
             let count = match primitive {
-                PlacedPrimitive::Line { .. } | PlacedPrimitive::Circle { .. } => 1,
-                PlacedPrimitive::Polyline { points, closed, .. } => {
-                    points.len().saturating_sub(1) + usize::from(*closed)
-                }
+                PlacedPrimitive::Line { .. } => 1,
+                PlacedPrimitive::Circle { filled, .. } => 1 + usize::from(*filled),
+                PlacedPrimitive::Polyline {
+                    points,
+                    closed,
+                    filled,
+                    ..
+                } => points.len().saturating_sub(1) + usize::from(*closed) + usize::from(*filled),
             };
             total = total.checked_add(count).ok_or_else(|| {
                 AdapterError::new(
@@ -1041,4 +1253,34 @@ fn projected_entity_count(
         }
     }
     Ok(total)
+}
+
+#[cfg(test)]
+mod tests {
+    use super::circumcircle;
+    use std::error::Error;
+    use surveycraft_geometry::Point3;
+
+    #[test]
+    fn circumcircle_stays_precise_at_large_survey_coordinates() -> Result<(), Box<dyn Error>> {
+        let center_x = 337_275.053;
+        let center_y = 595_286.485;
+        let expected_radius = 0.01;
+        let point = |angle: f64| {
+            Point3::new(
+                center_x + expected_radius * angle.cos(),
+                center_y + expected_radius * angle.sin(),
+                100.0,
+            )
+        };
+        let first = point(0.0)?;
+        let second = point(std::f64::consts::TAU / 3.0)?;
+        let third = point(std::f64::consts::TAU * 2.0 / 3.0)?;
+        let (center, radius) = circumcircle(first, second, third)?;
+
+        assert!((center.x() - center_x).abs() < 1.0e-8);
+        assert!((center.y() - center_y).abs() < 1.0e-8);
+        assert!((radius - expected_radius).abs() < 1.0e-8);
+        Ok(())
+    }
 }

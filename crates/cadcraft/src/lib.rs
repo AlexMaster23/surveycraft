@@ -20,6 +20,7 @@ const POINT_ID_METADATA_KEY: &str = "point-id";
 const PROJECT_ID_METADATA_KEY: &str = "project-id";
 const ROLE_METADATA_KEY: &str = "role";
 const MAX_INSERT_POINTS: usize = 2_000;
+const MAX_PROJECT_POINTS: usize = 2_000;
 const MAX_COORDINATE: f64 = 1.0e15;
 const MAX_POINT_NUMBER_BYTES: usize = 128;
 const MAX_CODE_BYTES: usize = 256;
@@ -56,6 +57,24 @@ pub struct CircleRequest {
     pub center: Point3,
     pub radius: f64,
     pub layer: String,
+}
+
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct EntityAppearance {
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub color: Option<String>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub lineweight_mm: Option<f64>,
+}
+
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct SolidFillRequest {
+    pub boundary: Vec<Point3>,
+    pub layer: String,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub color: Option<String>,
 }
 
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
@@ -397,6 +416,17 @@ pub trait CadcraftHost {
         transaction: TransactionId,
         request: &CircleRequest,
     ) -> Result<EntityId, HostError>;
+    fn create_solid_fill(
+        &mut self,
+        transaction: TransactionId,
+        request: &SolidFillRequest,
+    ) -> Result<EntityId, HostError>;
+    fn set_entity_appearance(
+        &mut self,
+        transaction: TransactionId,
+        entity: EntityId,
+        appearance: &EntityAppearance,
+    ) -> Result<(), HostError>;
     fn create_point(
         &mut self,
         transaction: TransactionId,
@@ -477,6 +507,8 @@ pub fn insert_points(
         None => new_drawing_project(request)
             .map_err(|error| AdapterError::new("create survey project", error, None))?,
     };
+    validate_project_capacity(stored.project.points.len(), request.rows.len())
+        .map_err(|error| AdapterError::new("validate point capacity", error, None))?;
     reject_existing_numbers(&stored.project, request)
         .map_err(|error| AdapterError::new("validate points", error, None))?;
 
@@ -489,7 +521,8 @@ pub fn insert_points(
         let (cad_x, cad_y) = cad_xy(row, request.convention);
         let position = point(cad_x, cad_y, row.elevation)
             .map_err(|error| rollback_error(host, transaction, "prepare point", error))?;
-        let point_id = drawing_point_id(stored.project.id, &row.number);
+        let point_id = allocate_drawing_point_id(&stored.project, &row.number)
+            .map_err(|error| rollback_error(host, transaction, "allocate point identity", error))?;
         let point_entity = create_point_entity(
             host,
             transaction,
@@ -766,6 +799,7 @@ fn point_manager_snapshot(
         .project
         .points
         .iter()
+        .take(MAX_PROJECT_POINTS)
         .filter_map(|point| {
             let linked = links.get(&point.id).copied()?;
             let status = match issues.get(&point.id) {
@@ -816,7 +850,7 @@ fn point_manager_snapshot(
     rows.sort_by(|left, right| {
         compare_point_numbers(&left.number, &right.number).then_with(|| left.id.cmp(&right.id))
     });
-    let summary = format!(
+    let mut summary = format!(
         "{} {} · {} healthy · {} missing · {} modified · {} orphaned entities",
         report.points,
         if report.points == 1 {
@@ -829,6 +863,12 @@ fn point_manager_snapshot(
         report.modified_entities,
         report.orphaned_entities
     );
+    if report.points > rows.len() {
+        summary.push_str(&format!(
+            " · showing the first {} points supported by this CADCraft manager",
+            rows.len()
+        ));
+    }
     Ok(PointManagerSnapshot {
         rows,
         summary,
@@ -1580,11 +1620,25 @@ fn initial_project_id(request: &InsertPointsRequest) -> Uuid {
     Uuid::new_v5(&Uuid::NAMESPACE_URL, seed.as_bytes())
 }
 
-fn drawing_point_id(project_id: Uuid, number: &str) -> Uuid {
-    Uuid::new_v5(
-        &project_id,
-        format!("drawing-point:{}", number.trim().to_lowercase()).as_bytes(),
-    )
+fn allocate_drawing_point_id(project: &SurveyProject, number: &str) -> Result<Uuid, HostError> {
+    let normalized = number.trim().to_lowercase();
+    let occupied = project
+        .points
+        .iter()
+        .map(|point| point.id)
+        .collect::<HashSet<_>>();
+    for nonce in 0..=project.points.len() {
+        let seed = if nonce == 0 {
+            format!("drawing-point:{normalized}")
+        } else {
+            format!("drawing-point:{normalized}:{nonce}")
+        };
+        let candidate = Uuid::new_v5(&project.id, seed.as_bytes());
+        if !occupied.contains(&candidate) {
+            return Ok(candidate);
+        }
+    }
+    Err(HostError::new("could not allocate a unique point identity"))
 }
 
 fn reject_existing_numbers(
@@ -1890,6 +1944,18 @@ fn validate_insert_request(request: &InsertPointsRequest) -> Result<(), HostErro
     Ok(())
 }
 
+fn validate_project_capacity(existing: usize, additional: usize) -> Result<(), HostError> {
+    if existing
+        .checked_add(additional)
+        .is_none_or(|total| total > MAX_PROJECT_POINTS)
+    {
+        return Err(HostError::new(format!(
+            "a drawing cannot contain more than {MAX_PROJECT_POINTS} managed SurveyCraft points until CADCraft supports paged extension managers"
+        )));
+    }
+    Ok(())
+}
+
 fn point(cad_x: f64, cad_y: f64, elevation: f64) -> Result<Point3, HostError> {
     if [cad_x, cad_y, elevation]
         .iter()
@@ -1961,6 +2027,7 @@ mod tests {
         events: Vec<&'static str>,
         entities: BTreeMap<EntityId, EntityView>,
         entity_metadata: BTreeMap<EntityId, BTreeMap<String, String>>,
+        appearances: BTreeMap<EntityId, EntityAppearance>,
         drawing_metadata: BTreeMap<String, String>,
         next_id: u64,
         fail_create: bool,
@@ -2039,6 +2106,41 @@ mod tests {
                     None,
                 ))
             }
+        }
+
+        fn create_solid_fill(
+            &mut self,
+            _transaction: TransactionId,
+            request: &SolidFillRequest,
+        ) -> Result<EntityId, HostError> {
+            self.events.push("create-solid-fill");
+            if self.fail_create {
+                Err(HostError::new("synthetic create failure"))
+            } else {
+                let position = request.boundary.first().copied();
+                let entity = self.allocate(EntityKind::Other, &request.layer, position, None);
+                self.appearances.insert(
+                    entity,
+                    EntityAppearance {
+                        color: request.color.clone(),
+                        lineweight_mm: None,
+                    },
+                );
+                Ok(entity)
+            }
+        }
+
+        fn set_entity_appearance(
+            &mut self,
+            _transaction: TransactionId,
+            entity: EntityId,
+            appearance: &EntityAppearance,
+        ) -> Result<(), HostError> {
+            if !self.entities.contains_key(&entity) {
+                return Err(HostError::new("missing entity"));
+            }
+            self.appearances.insert(entity, appearance.clone());
+            Ok(())
         }
 
         fn create_point(
@@ -2189,6 +2291,7 @@ mod tests {
             entity: EntityId,
         ) -> Result<(), HostError> {
             self.entities.remove(&entity);
+            self.appearances.remove(&entity);
             Ok(())
         }
 
@@ -2564,6 +2667,148 @@ mod tests {
     }
 
     #[test]
+    fn code_book_updates_swap_rule_ids_without_losing_contents() -> Result<(), Box<dyn Error>> {
+        let mut host = MockHost::default();
+        let listed = manage_code_book(&mut host, &CodeBookManagerRequest::List)?;
+        let CodeBookManagerResult::Snapshot(snapshot) = listed else {
+            return Err("code-book manager did not return rows".into());
+        };
+        let edge = snapshot
+            .rows
+            .iter()
+            .find(|row| row.rule_id == "edge")
+            .ok_or("missing edge rule")?;
+        let boundary = snapshot
+            .rows
+            .iter()
+            .find(|row| row.rule_id == "boundary")
+            .ok_or("missing boundary rule")?;
+        let edit = |row: &CodeRuleRow, rule_id: &str| CodeRuleEdit {
+            record: row.record.clone(),
+            rule_id: rule_id.to_owned(),
+            pattern: row.pattern.clone(),
+            match_mode: row.match_mode.clone(),
+            description: row.description.clone(),
+            optimization_rank: f64::from(row.optimization_rank),
+            layer: row.layer.clone(),
+            graphic_kind: row.graphic_kind.clone(),
+            style_or_symbol: row.style_or_symbol.clone(),
+            scale_or_width: row.scale_or_width,
+            attribute_from_suffix: row.attribute_from_suffix.clone(),
+        };
+        let edge_description = edge.description.clone();
+        let boundary_description = boundary.description.clone();
+        manage_code_book(
+            &mut host,
+            &CodeBookManagerRequest::Update {
+                rows: vec![edit(edge, "boundary"), edit(boundary, "edge")],
+            },
+        )?;
+
+        let listed = manage_code_book(&mut host, &CodeBookManagerRequest::List)?;
+        let CodeBookManagerResult::Snapshot(snapshot) = listed else {
+            return Err("code-book manager did not return updated rows".into());
+        };
+        assert!(
+            snapshot
+                .rows
+                .iter()
+                .any(|row| { row.rule_id == "boundary" && row.description == edge_description })
+        );
+        assert!(
+            snapshot
+                .rows
+                .iter()
+                .any(|row| { row.rule_id == "edge" && row.description == boundary_description })
+        );
+        Ok(())
+    }
+
+    #[test]
+    fn code_book_export_honors_selected_rule_ids() -> Result<(), Box<dyn Error>> {
+        let mut host = MockHost::default();
+        let exported = manage_code_book(
+            &mut host,
+            &CodeBookManagerRequest::Export {
+                ids: vec!["edge".into()],
+            },
+        )?;
+        let CodeBookManagerResult::Export(exported) = exported else {
+            return Err("code-book manager did not return an export".into());
+        };
+        let book = surveycraft_io::read_code_book(
+            exported.content.as_bytes(),
+            surveycraft_io::CodeBookFormat::Json,
+        )?;
+        assert_eq!(exported.rules, 1);
+        assert_eq!(book.rules.len(), 1);
+        assert_eq!(book.rules[0].id, "edge");
+        Ok(())
+    }
+
+    #[test]
+    fn renumbered_point_number_can_be_reused_with_a_new_identity() -> Result<(), Box<dyn Error>> {
+        let mut host = MockHost::default();
+        insert_points(&mut host, &request())?;
+        let listed = manage_points(&mut host, &PointManagerRequest::List)?;
+        let PointManagerResult::Snapshot(snapshot) = listed else {
+            return Err("point manager did not return rows".into());
+        };
+        let original = snapshot.rows.first().ok_or("missing inserted point")?;
+        manage_points(
+            &mut host,
+            &PointManagerRequest::Update {
+                rows: vec![PointManagerEdit {
+                    id: original.id,
+                    number: "102".into(),
+                    x: original.x,
+                    y: original.y,
+                    elevation: original.elevation,
+                    code: original.code.clone(),
+                    description: original.description.clone(),
+                }],
+            },
+        )?;
+        insert_points(&mut host, &request())?;
+
+        let metadata = host
+            .drawing_metadata
+            .get(PROJECT_METADATA_KEY)
+            .ok_or("missing project metadata")?;
+        let stored: DrawingSurveyProject = serde_json::from_str(metadata)?;
+        let ids = stored
+            .project
+            .points
+            .iter()
+            .map(|point| point.id)
+            .collect::<HashSet<_>>();
+        assert_eq!(stored.project.points.len(), 2);
+        assert_eq!(ids.len(), 2);
+        assert!(
+            stored
+                .project
+                .points
+                .iter()
+                .any(|point| point.number == "101")
+        );
+        assert!(
+            stored
+                .project
+                .points
+                .iter()
+                .any(|point| point.number == "102")
+        );
+        Ok(())
+    }
+
+    #[test]
+    fn project_capacity_matches_the_native_manager_limit() {
+        assert!(validate_project_capacity(MAX_PROJECT_POINTS - 1, 1).is_ok());
+        assert!(validate_project_capacity(MAX_PROJECT_POINTS, 1).is_err());
+        assert!(validate_project_capacity(usize::MAX, 1).is_err());
+    }
+
+    #[test]
     fn coded_features_are_native_linked_and_replaced_transactionally() -> Result<(), Box<dyn Error>>
     {
         let mut host = MockHost::default();
@@ -2646,6 +2891,15 @@ mod tests {
                 .iter()
                 .any(|entity| entity.kind == EntityKind::Circle)
         );
+        assert!(host.events.contains(&"create-solid-fill"));
+        assert!(
+            linked
+                .iter()
+                .all(|entity| host.appearances.contains_key(&entity.id))
+        );
+        assert!(host.appearances.values().any(|appearance| {
+            appearance.color.is_some() && appearance.lineweight_mm.is_some()
+        }));
 
         let second = generate_coded_features(&mut host, GenerateCodedFeaturesRequest::default())?;
         assert_eq!(second.replaced_entities, first.entities);

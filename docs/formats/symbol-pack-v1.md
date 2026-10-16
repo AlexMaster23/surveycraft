@@ -54,8 +54,11 @@ same definition has the correct model size in metre, millimetre, international-f
 US-survey-foot projects. `strokeWidthMm` remains a paper line-weight value rather than a model-space
 distance.
 
-Placement produces CAD-independent line, circle and polyline geometry. Creating blocks/entities,
-assigning metadata and committing one Undo step belong to the future CADCraft adapter.
+Placement first produces CAD-independent line, circle and polyline geometry. The current CADCraft
+adapter then creates editable native line/circle primitives, maps closed filled primitives to
+polygonal `HATCH` entities, applies explicit or layer-inherited color and paper lineweight, assigns
+stable metadata, and commits the complete generation as one Undo step. Reusable native block
+definitions remain future work.
 
 ## Validation tools
 

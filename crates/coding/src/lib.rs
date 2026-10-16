@@ -17,6 +17,7 @@ pub const MAX_RULES: usize = 4_096;
 pub const MAX_CODE_BYTES: usize = 4_096;
 pub const MAX_CODE_TOKENS: usize = 64;
 pub const MAX_FEATURE_POINTS: usize = 1_000_000;
+pub const MAX_MATCH_EVALUATIONS: usize = 10_000_000;
 const MAX_ID_BYTES: usize = 128;
 const MAX_NAME_BYTES: usize = 256;
 const MAX_PATTERN_BYTES: usize = 512;
@@ -39,6 +40,7 @@ pub enum CodingError {
     DuplicateDirective(String),
     CodeTooLong,
     TooManyCodeTokens,
+    MatchBudgetExceeded,
     InvalidQuery,
     InvalidReplacement,
     InvalidPlanScale,
@@ -96,6 +98,10 @@ impl Display for CodingError {
             Self::TooManyCodeTokens => {
                 write!(formatter, "point code exceeds {MAX_CODE_TOKENS} tokens")
             }
+            Self::MatchBudgetExceeded => write!(
+                formatter,
+                "code matching exceeds the {MAX_MATCH_EVALUATIONS}-evaluation safety budget"
+            ),
             Self::InvalidQuery => write!(formatter, "code query is empty or too large"),
             Self::InvalidReplacement => {
                 write!(
@@ -219,11 +225,14 @@ pub struct CompiledCodeBook {
     book: CodeBook,
     rules: Vec<CompiledRule>,
     rule_indexes: HashMap<String, usize>,
+    exact_rule_indexes: HashMap<String, Vec<usize>>,
+    non_exact_rule_indexes: Vec<usize>,
     directives: HashMap<String, JoinDirective>,
 }
 
 #[derive(Debug)]
 struct CompiledRule {
+    normalized_pattern: String,
     regex: Option<Regex>,
 }
 
@@ -407,6 +416,8 @@ impl CompiledCodeBook {
         let mut ids = HashSet::with_capacity(book.rules.len());
         let mut compiled_rules = Vec::with_capacity(book.rules.len());
         let mut rule_indexes = HashMap::with_capacity(book.rules.len());
+        let mut exact_rule_indexes: HashMap<String, Vec<usize>> = HashMap::new();
+        let mut non_exact_rule_indexes = Vec::new();
         for (index, rule) in book.rules.iter().enumerate() {
             validate_rule(rule, &layer_ids)?;
             if !ids.insert(rule.id.clone()) {
@@ -428,13 +439,31 @@ impl CompiledCodeBook {
             } else {
                 None
             };
-            compiled_rules.push(CompiledRule { regex });
+            let normalized_pattern = if book.case_sensitive {
+                rule.pattern.clone()
+            } else {
+                rule.pattern.to_lowercase()
+            };
+            if rule.match_mode == MatchMode::Exact {
+                exact_rule_indexes
+                    .entry(normalized_pattern.clone())
+                    .or_default()
+                    .push(index);
+            } else {
+                non_exact_rule_indexes.push(index);
+            }
+            compiled_rules.push(CompiledRule {
+                normalized_pattern,
+                regex,
+            });
             rule_indexes.insert(rule.id.clone(), index);
         }
         Ok(Self {
             book,
             rules: compiled_rules,
             rule_indexes,
+            exact_rule_indexes,
+            non_exact_rule_indexes,
             directives,
         })
     }
@@ -445,6 +474,26 @@ impl CompiledCodeBook {
     }
 
     pub fn interpret_code(&self, raw: &str) -> Result<CodeInterpretation, CodingError> {
+        let mut remaining_evaluations = MAX_MATCH_EVALUATIONS;
+        self.interpret_code_with_budget(raw, &mut remaining_evaluations)
+    }
+
+    pub fn interpret_codes<'a>(
+        &self,
+        codes: impl IntoIterator<Item = &'a str>,
+    ) -> Result<Vec<CodeInterpretation>, CodingError> {
+        let mut remaining_evaluations = MAX_MATCH_EVALUATIONS;
+        codes
+            .into_iter()
+            .map(|code| self.interpret_code_with_budget(code, &mut remaining_evaluations))
+            .collect()
+    }
+
+    fn interpret_code_with_budget(
+        &self,
+        raw: &str,
+        remaining_evaluations: &mut usize,
+    ) -> Result<CodeInterpretation, CodingError> {
         if raw.len() > MAX_CODE_BYTES {
             return Err(CodingError::CodeTooLong);
         }
@@ -466,7 +515,7 @@ impl CompiledCodeBook {
                 symbol_attributes.insert(rule_id, token.clone());
                 continue;
             }
-            let candidates = self.matching_rule_indexes(token);
+            let candidates = self.matching_rule_indexes(token, remaining_evaluations)?;
             let Some(selected) = candidates.first().copied() else {
                 diagnostics.push(CodingDiagnostic {
                     severity: DiagnosticSeverity::Warning,
@@ -614,10 +663,13 @@ impl CompiledCodeBook {
         let mut diagnostics = Vec::new();
         let mut circle_groups: BTreeMap<String, Vec<FeaturePoint>> = BTreeMap::new();
         let mut planned_symbols: HashSet<(Uuid, String)> = HashSet::new();
+        let mut remaining_evaluations = MAX_MATCH_EVALUATIONS;
 
         for point in ordered {
-            let interpretation =
-                self.interpret_code(point.code.as_deref().map_or("", |value| value))?;
+            let interpretation = self.interpret_code_with_budget(
+                point.code.as_deref().map_or("", |value| value),
+                &mut remaining_evaluations,
+            )?;
             diagnostics.extend(
                 interpretation
                     .diagnostics
@@ -707,8 +759,10 @@ impl CompiledCodeBook {
     ) -> Result<Option<LineStyleDecision>, CodingError> {
         let mut counts: BTreeMap<String, usize> = BTreeMap::new();
         let mut coded_points = 0usize;
+        let mut remaining_evaluations = MAX_MATCH_EVALUATIONS;
         for code in codes {
-            let interpretation = self.interpret_code(code)?;
+            let interpretation =
+                self.interpret_code_with_budget(code, &mut remaining_evaluations)?;
             if let Some(rule_id) = interpretation
                 .matches
                 .iter()
@@ -776,31 +830,40 @@ impl CompiledCodeBook {
         }
     }
 
-    fn matching_rule_indexes(&self, token: &str) -> Vec<usize> {
+    fn matching_rule_indexes(
+        &self,
+        token: &str,
+        remaining_evaluations: &mut usize,
+    ) -> Result<Vec<usize>, CodingError> {
+        let evaluation_count = self.non_exact_rule_indexes.len().saturating_add(1);
+        if *remaining_evaluations < evaluation_count {
+            return Err(CodingError::MatchBudgetExceeded);
+        }
+        *remaining_evaluations -= evaluation_count;
         let normalized_token = self.normalize(token);
-        let mut indexes: Vec<usize> = self
-            .book
-            .rules
-            .iter()
-            .enumerate()
-            .filter_map(|(index, rule)| {
-                let normalized_pattern = self.normalize(&rule.pattern);
-                let matched = match rule.match_mode {
-                    MatchMode::Exact => normalized_token == normalized_pattern,
-                    MatchMode::Prefix => normalized_token.starts_with(&normalized_pattern),
-                    MatchMode::Regex => self
-                        .rules
-                        .get(index)
-                        .and_then(|compiled| compiled.regex.as_ref())
-                        .is_some_and(|regex| regex.is_match(token)),
-                };
-                matched.then_some(index)
-            })
-            .collect();
+        let mut indexes = self
+            .exact_rule_indexes
+            .get(&normalized_token)
+            .cloned()
+            .unwrap_or_default();
+        indexes.extend(self.non_exact_rule_indexes.iter().filter_map(|index| {
+            let rule = &self.book.rules[*index];
+            let normalized_pattern = &self.rules[*index].normalized_pattern;
+            let matched = match rule.match_mode {
+                MatchMode::Exact => false,
+                MatchMode::Prefix => normalized_token.starts_with(normalized_pattern),
+                MatchMode::Regex => self
+                    .rules
+                    .get(*index)
+                    .and_then(|compiled| compiled.regex.as_ref())
+                    .is_some_and(|regex| regex.is_match(token)),
+            };
+            matched.then_some(*index)
+        }));
         indexes.sort_by(|left, right| {
             compare_rules(&self.book.rules[*left], &self.book.rules[*right])
         });
-        indexes
+        Ok(indexes)
     }
 
     fn rule(&self, id: &str) -> Option<&CodeRule> {
@@ -1519,6 +1582,18 @@ mod tests {
                 row: 1,
             },
         )?)
+    }
+
+    #[test]
+    fn rejects_code_matching_before_the_shared_budget_is_exhausted() -> Result<(), Box<dyn Error>> {
+        let compiled = book()?;
+        let mut remaining_evaluations = 2;
+        let result = compiled.interpret_code_with_budget("EP", &mut remaining_evaluations);
+        assert!(matches!(
+            result,
+            Err(super::CodingError::MatchBudgetExceeded)
+        ));
+        Ok(())
     }
 
     #[test]
