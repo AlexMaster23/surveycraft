@@ -14,8 +14,9 @@ been accepted or released. v0.4 feature work is paused while that proposal is re
 
 This repository contains the **Phase 0 engineering foundation** and the working Phase 1 point
 import, persistent point identity and Point Manager workflow. The implementation plan is in
-[BLUEPRINT.md](BLUEPRINT.md), the product parity ledger is in
-[docs/FEATURE_MATRIX.md](docs/FEATURE_MATRIX.md), the versioned release plan is in
+[BLUEPRINT.md](BLUEPRINT.md), the product parity ledgers are in
+[docs/FEATURE_MATRIX.md](docs/FEATURE_MATRIX.md) and
+[docs/TOPO_LT_COVERAGE.md](docs/TOPO_LT_COVERAGE.md), the versioned release plan is in
 [ROADMAP.md](ROADMAP.md), and the interface specification is in
 [docs/UI_BLUEPRINT.md](docs/UI_BLUEPRINT.md). Released changes are recorded in
 [CHANGELOG.md](CHANGELOG.md).

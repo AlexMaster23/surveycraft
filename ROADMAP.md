@@ -8,6 +8,21 @@ host capabilities exist.
 The product phases and clean-room engineering constraints remain defined in
 [BLUEPRINT.md](BLUEPRINT.md). GitHub milestones mirror the versions below.
 
+## Full workflow coverage requirement
+
+The long-term scope is complete coverage of TopoLT's user-visible workflows, including advanced
+tools and separately installed instrument, imagery and country-specific packs. The
+[feature ledger](docs/FEATURE_MATRIX.md) must account for every identified command, option, format
+and workflow variant, its delivery route, implementation status and result-verification evidence.
+The [command-level ledger](docs/TOPO_LT_COVERAGE.md) accounts for all 140 exposed actions in the
+current static-analysis baseline. Their dialog options, formats and runtime results still need a
+detailed completeness audit.
+
+The release train below is the current delivery plan, not a limit on scope. Newly identified gaps
+must receive a target milestone or an explicit unscheduled tracking item. Native CADCraft features
+may satisfy a workflow only after an equivalent path is documented and tested. v1.0 is the first
+supported stable workflow set, not an automatic declaration of complete TopoLT parity.
+
 ## Current priority: official CADCraft host support
 
 v0.4 feature development is paused while the extension-host proposal receives upstream review.

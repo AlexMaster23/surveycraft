@@ -34,14 +34,24 @@ field files / CSV / manual points
        sheets / exports / audit
 ```
 
-The target is behavioral parity where it is useful, not a clone of TopoLT's internals or visual
-design. SurveyCraft should produce the same mathematically correct result for equivalent inputs,
-while using its own data model, commands, interface, documentation, and assets.
+The long-term target is complete coverage of TopoLT's user-visible workflows, not a clone of its
+internals or visual design. SurveyCraft should produce equivalent mathematically correct results
+for equivalent inputs, with explicit units, axis conventions, rounding and numerical tolerances,
+while using its own data model, commands, interface, documentation and assets. Differences and
+unknowns must be recorded rather than silently accepted as parity.
+
+Every identified command, dialog option, supported format and workflow variant must be accounted
+for in the [feature ledger](docs/FEATURE_MATRIX.md). A workflow may be delivered by SurveyCraft,
+an optional pack or a verified native CADCraft equivalent; it must not disappear from scope because
+it is difficult, country-specific or dependent on host support. The versioned roadmap stages this
+work. The first stable v1.0 milestone is not a claim that full TopoLT coverage has been achieved.
 
 ## 2. Evidence baseline and clean-room rules
 
 The existing static-analysis report identifies 109 documented menu commands plus additional
-integration entry points. Its observed feature groups are the baseline for the parity ledger:
+integration entry points. This is a provisional discovery baseline, not proof of an exhaustive
+behavior inventory or of verified parity. Command options, dialogs, formats and end-to-end variants
+still need a command-level audit. The recorded feature groups are the baseline for the parity ledger:
 
 - point-set management and individual point operations;
 - coordinate-file calculations and total-station communication;
@@ -53,8 +63,9 @@ integration entry points. Its observed feature groups are the baseline for the p
 - coordinate and entity transformations;
 - general drafting utilities and geographic exchange.
 
-The public repository records only the resulting clean-room behavior categories in
-[docs/FEATURE_MATRIX.md](docs/FEATURE_MATRIX.md). Research notes and any proprietary comparison
+The public repository records clean-room behavior categories in
+[docs/FEATURE_MATRIX.md](docs/FEATURE_MATRIX.md) and the exposed-action baseline in
+[docs/TOPO_LT_COVERAGE.md](docs/TOPO_LT_COVERAGE.md). Research notes and any proprietary comparison
 environment stay outside this repository; they are not build inputs or redistributable assets.
 
 Rules for implementation:

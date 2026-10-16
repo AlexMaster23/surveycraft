@@ -4,6 +4,10 @@ SurveyCraft is a clean-room, open-source surveying extension for CADCraft.
 
 ## Non-negotiable rules
 
+- Product scope is complete coverage of TopoLT's user-visible workflows, tracked in
+  `docs/FEATURE_MATRIX.md`. Optional packs are optional to install, not silently excluded from
+  coverage. Record unknowns, host dependencies and behavioral differences; do not claim complete
+  parity from a partial milestone or an unaudited command count.
 - Do not copy or translate TopoLT code, decompiler output, icons, drawings, symbols, templates,
   textures, databases, fonts, help text, configuration files or other proprietary assets.
 - Use public standards, public mathematical references and independently written synthetic tests.
