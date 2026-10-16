@@ -7,9 +7,10 @@ use std::fmt::{Display, Formatter};
 use surveycraft_geometry::Point3;
 use uuid::Uuid;
 
-pub const PROJECT_SCHEMA_VERSION: u32 = 1;
+pub const PROJECT_SCHEMA_VERSION: u32 = 2;
 const MAX_PROJECT_NAME_BYTES: usize = 256;
 const MAX_POINT_NUMBER_BYTES: usize = 128;
+const MAX_STYLE_NAME_BYTES: usize = 255;
 
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub enum CoreError {
@@ -19,6 +20,7 @@ pub enum CoreError {
     InvalidDisplayDecimals,
     UnsupportedSchemaVersion(u32),
     DuplicatePointId(Uuid),
+    InvalidStyle(&'static str),
 }
 
 impl Display for CoreError {
@@ -39,6 +41,9 @@ impl Display for CoreError {
                 write!(formatter, "unsupported project schema version {version}")
             }
             Self::DuplicatePointId(id) => write!(formatter, "duplicate point id {id}"),
+            Self::InvalidStyle(field) => {
+                write!(formatter, "point style field '{field}' is invalid")
+            }
         }
     }
 }
@@ -148,6 +153,80 @@ pub struct SurveyPoint {
     pub quality_flags: BTreeSet<QualityFlag>,
 }
 
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct PointStyle {
+    pub layer: String,
+}
+
+impl Default for PointStyle {
+    fn default() -> Self {
+        Self {
+            layer: "SC-POINTS".to_owned(),
+        }
+    }
+}
+
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct LabelStyle {
+    pub number_layer: String,
+    pub elevation_layer: String,
+    pub code_layer: String,
+    pub height: f64,
+    pub offset_x: f64,
+    pub offset_y: f64,
+    pub elevation_decimals: u8,
+}
+
+impl Default for LabelStyle {
+    fn default() -> Self {
+        Self {
+            number_layer: "SC-POINT-NUMBERS".to_owned(),
+            elevation_layer: "SC-POINT-ELEVATIONS".to_owned(),
+            code_layer: "SC-POINT-CODES".to_owned(),
+            height: 0.25,
+            offset_x: 0.35,
+            offset_y: 0.35,
+            elevation_decimals: 3,
+        }
+    }
+}
+
+#[derive(Debug, Clone, Default, PartialEq, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct ProjectStyles {
+    pub point: PointStyle,
+    pub labels: LabelStyle,
+}
+
+impl ProjectStyles {
+    pub fn validate(&self) -> Result<(), CoreError> {
+        for (field, value) in [
+            ("point.layer", self.point.layer.as_str()),
+            ("labels.numberLayer", self.labels.number_layer.as_str()),
+            (
+                "labels.elevationLayer",
+                self.labels.elevation_layer.as_str(),
+            ),
+            ("labels.codeLayer", self.labels.code_layer.as_str()),
+        ] {
+            validate_text(value, MAX_STYLE_NAME_BYTES)
+                .map_err(|_| CoreError::InvalidStyle(field))?;
+        }
+        if !self.labels.height.is_finite() || self.labels.height <= 0.0 {
+            return Err(CoreError::InvalidStyle("labels.height"));
+        }
+        if !self.labels.offset_x.is_finite() || !self.labels.offset_y.is_finite() {
+            return Err(CoreError::InvalidStyle("labels.offset"));
+        }
+        if self.labels.elevation_decimals > 12 {
+            return Err(CoreError::InvalidStyle("labels.elevationDecimals"));
+        }
+        Ok(())
+    }
+}
+
 impl SurveyPoint {
     pub fn new(
         id: Uuid,
@@ -192,6 +271,8 @@ pub struct SurveyProject {
     pub crs: Crs,
     pub linear_unit: LinearUnit,
     pub numeric_policy: NumericPolicy,
+    #[serde(default)]
+    pub styles: ProjectStyles,
     pub points: Vec<SurveyPoint>,
 }
 
@@ -213,6 +294,7 @@ impl SurveyProject {
             crs,
             linear_unit,
             numeric_policy,
+            styles: ProjectStyles::default(),
             points: Vec::new(),
         })
     }
@@ -224,6 +306,7 @@ impl SurveyProject {
         validate_text(&self.name, MAX_PROJECT_NAME_BYTES)
             .map_err(|_| CoreError::InvalidProjectName)?;
         self.numeric_policy.validate()?;
+        self.styles.validate()?;
         let mut ids = HashSet::with_capacity(self.points.len());
         for point in &self.points {
             validate_text(&point.number, MAX_POINT_NUMBER_BYTES)
@@ -238,6 +321,21 @@ impl SurveyProject {
     pub fn add_point(&mut self, point: SurveyPoint) {
         self.points.push(point);
     }
+}
+
+/// Upgrade a deserialized project to the current schema. Version 1 did not persist styles, so its
+/// migration is lossless and supplies the documented defaults.
+pub fn migrate_project(mut project: SurveyProject) -> Result<SurveyProject, CoreError> {
+    match project.schema_version {
+        1 => {
+            project.schema_version = PROJECT_SCHEMA_VERSION;
+            project.styles = ProjectStyles::default();
+        }
+        PROJECT_SCHEMA_VERSION => {}
+        version => return Err(CoreError::UnsupportedSchemaVersion(version)),
+    }
+    project.validate()?;
+    Ok(project)
 }
 
 fn validate_positive(field: &'static str, value: f64) -> Result<(), CoreError> {
@@ -270,8 +368,8 @@ fn clean_optional_text(value: Option<String>) -> Option<String> {
 #[cfg(test)]
 mod tests {
     use super::{
-        Crs, LinearUnit, NumericPolicy, SourceRef, SurveyPoint, SurveyProject,
-        deterministic_point_id,
+        Crs, LinearUnit, NumericPolicy, ProjectStyles, SourceRef, SurveyPoint, SurveyProject,
+        deterministic_point_id, migrate_project,
     };
     use std::error::Error;
     use surveycraft_geometry::Point3;
@@ -312,6 +410,25 @@ mod tests {
             },
         )?);
         project.validate()?;
+        Ok(())
+    }
+
+    #[test]
+    fn migrates_schema_one_to_default_styles() -> Result<(), Box<dyn Error>> {
+        let mut project = SurveyProject::new(
+            Uuid::nil(),
+            "Legacy project",
+            Crs::local_engineering(),
+            LinearUnit::Metre,
+            NumericPolicy::default(),
+        )?;
+        project.schema_version = 1;
+        project.styles.labels.height = 99.0;
+
+        let migrated = migrate_project(project)?;
+
+        assert_eq!(migrated.schema_version, super::PROJECT_SCHEMA_VERSION);
+        assert_eq!(migrated.styles, ProjectStyles::default());
         Ok(())
     }
 }

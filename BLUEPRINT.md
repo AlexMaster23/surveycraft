@@ -1,6 +1,6 @@
 # SurveyCraft product and engineering blueprint
 
-Status: **Phase 0 complete; Phase 1 point-import MVP implemented; CADCraft host pending upstream review**
+Status: **Phase 0 complete; Phase 1 persistent point model implemented; CADCraft host pending upstream review**
 Brand direction: **orange SurveyCraft family mark**
 Target host: **CADCraft desktop first; portable core and WASM-compatible extension runtime**
 
@@ -195,6 +195,7 @@ entity through a guarded transaction.
 - [MVP implemented] CSV/text import with header mapping, preview and diagnostics;
 - [MVP implemented] manual coordinate rows, duplicate detection and one-step drawing insertion;
 - [MVP implemented] CAD point, number, elevation and optional code layers;
+- [Implemented] persistent point UUIDs, exact CAD entity links, stored styles and stale-link diagnostics;
 - manual point creation/editing, renumbering, duplicate detection and elevation edits;
 - code book with layer/symbol/feature-line rules;
 - point labels, styles and CAD metadata links;
@@ -288,5 +289,5 @@ SurveyCraft 1.0 is ready when a user on the latest stable CADCraft can:
 3. [Done] Add the CLI and golden-test fixture.
 4. [Done locally] Implement the CADCraft WASM host contract and standalone extension package.
 5. [Done locally] Implement native table/CSV point insertion, CAD display layers and one-step undo.
-6. [Next] Add persistent point identity/metadata and point-style controls.
-7. Build the full Point Manager UI from the approved wireframe.
+6. [Done locally] Add persistent point identity/metadata, migrations and initial point styles.
+7. [Next] Build the full Point Manager UI from the approved wireframe.

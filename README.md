@@ -8,8 +8,8 @@ SurveyCraft is an open-source surveying, terrain and cadastral extension for CAD
 ordinary installable extension with its own repository and release package, not a fork of CADCraft
 and not source code bundled into CADCraft's extension-system pull request.
 
-This repository contains the **Phase 0 engineering foundation** and the first working Phase 1
-point-import workflow. The implementation plan is in
+This repository contains the **Phase 0 engineering foundation** and the working Phase 1 point
+import plus persistent point-identity workflow. The implementation plan is in
 [BLUEPRINT.md](BLUEPRINT.md), the product parity ledger is in
 [docs/FEATURE_MATRIX.md](docs/FEATURE_MATRIX.md), the versioned release plan is in
 [ROADMAP.md](ROADMAP.md), and the interface specification is in
@@ -18,8 +18,9 @@ point-import workflow. The implementation plan is in
 
 The working point command opens a native CADCraft table, accepts manually entered or imported
 coordinates, lets the user choose CAD/GIS or Survey/TopoLT X/Y interpretation, validates the rows,
-and inserts CAD points plus number, elevation and optional code labels. The whole operation is
-transactional and is removed by one Undo. The schema 2 host is implemented and proven locally on
+and inserts CAD points plus number, elevation and optional code labels. Every logical point and
+its CAD entities receive persistent links, stored styles and reconciliation diagnostics. The whole
+operation is transactional and is removed by one Undo. The schema 2 host is implemented and proven locally on
 CADCraft's `feature/extension-system` working branch; it is not part of a public CADCraft release
 yet.
 
@@ -68,6 +69,8 @@ This writes `target/extension-package/surveycraft.cadcraft-extension`. In CADCra
 the top of the Drafting Tool Sets palette; press **Import and insert points...** there, use
 **SurveyCraft > Points > Import and insert points...**, or type `SCPOINTS`. See
 [docs/POINT_IMPORT.md](docs/POINT_IMPORT.md) for the exact input contract and drawing output.
+Use **Check point links** or `SCCHECKPOINTS` to diagnose CAD entities deleted or edited outside
+SurveyCraft.
 
 ## Core and CLI
 
@@ -80,7 +83,7 @@ cargo run -p surveycraft-cli -- inspect survey.json
 ```
 
 Format contracts are documented in [docs/formats/point-csv-v1.md](docs/formats/point-csv-v1.md),
-[docs/formats/project-v1.md](docs/formats/project-v1.md), and
+[docs/formats/project-v2.md](docs/formats/project-v2.md), and
 [docs/numeric-policy.md](docs/numeric-policy.md). The host decision is recorded in
 [docs/adr/0001-portable-wasm-host.md](docs/adr/0001-portable-wasm-host.md).
 

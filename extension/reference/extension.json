@@ -2,7 +2,7 @@
   "schemaVersion": 2,
   "id": "io.github.alexmaster23.surveycraft",
   "name": "SurveyCraft",
-  "version": "0.1.0",
+  "version": "0.2.0",
   "cadcraft": ">=0.7.0, <1.0.0",
   "description": "Open-source surveying tools for CADCraft.",
   "license": "MIT OR Apache-2.0",
@@ -17,7 +17,7 @@
       "label": "Import and insert points...",
       "menu": ["SurveyCraft", "Points", "Import and insert points..."],
       "aliases": ["SCPOINTS", "SCPIMPORT"],
-      "params": "{convention:'cad-xy'|'survey-xy',rows:[{number,x,y,elevation,code?}],labelHeight?} -> {inserted,entities}",
+      "params": "{convention:'cad-xy'|'survey-xy',rows:[{number,x,y,elevation,code?}],labelHeight?} -> {inserted,entities,totalPoints,projectId}",
       "function": "insert-points",
       "interactive": false,
       "ui": {
@@ -83,6 +83,15 @@
       }
     },
     {
+      "id": "surveycraft.points.check-links",
+      "label": "Check point links",
+      "menu": ["SurveyCraft", "Points", "Check point links"],
+      "aliases": ["SCCHECKPOINTS"],
+      "params": "{} -> {projectId,points,healthyPoints,missingEntities,modifiedEntities,orphanedEntities,issues}",
+      "function": "inspect-project",
+      "interactive": false
+    },
+    {
       "id": "surveycraft.reference-line",
       "label": "Create diagnostic reference line",
       "menu": [],
@@ -102,11 +111,17 @@
           "command": "surveycraft.points.import",
           "icon": "import",
           "size": "large"
+        },
+        {
+          "command": "surveycraft.points.check-links",
+          "icon": "properties",
+          "size": "small"
         }
       ]
     }
   ],
   "permissions": [
+    "drawing-read",
     "drawing-write"
   ],
   "homepage": "https://github.com/AlexMaster23/surveycraft"

@@ -1,15 +1,29 @@
 //! Narrow, testable boundary between SurveyCraft commands and a CAD host.
 
 use serde::{Deserialize, Serialize};
-use std::collections::BTreeSet;
+use std::collections::{BTreeMap, BTreeSet, HashSet};
 use std::error::Error;
 use std::fmt::{Display, Formatter};
+use surveycraft_core::{
+    Crs, LinearUnit, NumericPolicy, SourceRef, SurveyPoint, SurveyProject, migrate_project,
+};
 use surveycraft_geometry::Point3;
+use uuid::Uuid;
 
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+const DRAWING_PROJECT_SCHEMA_VERSION: u32 = 1;
+const PROJECT_METADATA_KEY: &str = "survey-project";
+const POINT_ID_METADATA_KEY: &str = "point-id";
+const PROJECT_ID_METADATA_KEY: &str = "project-id";
+const ROLE_METADATA_KEY: &str = "role";
+const MAX_INSERT_POINTS: usize = 2_000;
+const MAX_COORDINATE: f64 = 1.0e15;
+const MAX_POINT_NUMBER_BYTES: usize = 128;
+const MAX_CODE_BYTES: usize = 256;
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Serialize, Deserialize)]
 pub struct TransactionId(pub u64);
 
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Serialize, Deserialize)]
 pub struct EntityId(pub u64);
 
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
@@ -35,6 +49,25 @@ pub struct TextRequest {
     pub height: f64,
     pub rotation_degrees: f64,
     pub layer: String,
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "kebab-case")]
+pub enum EntityKind {
+    Line,
+    Point,
+    Text,
+    Other,
+}
+
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct EntityView {
+    pub id: EntityId,
+    pub kind: EntityKind,
+    pub layer: String,
+    pub position: Option<Point3>,
+    pub value: Option<String>,
 }
 
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
@@ -73,6 +106,90 @@ pub struct InsertPointsRequest {
 pub struct InsertPointsResult {
     pub inserted: usize,
     pub entities: usize,
+    pub total_points: usize,
+    pub project_id: Uuid,
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "kebab-case")]
+pub enum PointEntityRole {
+    Point,
+    NumberLabel,
+    ElevationLabel,
+    CodeLabel,
+}
+
+impl PointEntityRole {
+    const fn metadata_value(self) -> &'static str {
+        match self {
+            Self::Point => "point",
+            Self::NumberLabel => "number-label",
+            Self::ElevationLabel => "elevation-label",
+            Self::CodeLabel => "code-label",
+        }
+    }
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct PointEntityLinks {
+    pub point_id: Uuid,
+    pub point: EntityId,
+    pub number_label: EntityId,
+    pub elevation_label: EntityId,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub code_label: Option<EntityId>,
+}
+
+impl PointEntityLinks {
+    fn roles(&self) -> [(PointEntityRole, Option<EntityId>); 4] {
+        [
+            (PointEntityRole::Point, Some(self.point)),
+            (PointEntityRole::NumberLabel, Some(self.number_label)),
+            (PointEntityRole::ElevationLabel, Some(self.elevation_label)),
+            (PointEntityRole::CodeLabel, self.code_label),
+        ]
+    }
+}
+
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct DrawingSurveyProject {
+    pub schema_version: u32,
+    pub project: SurveyProject,
+    pub entity_links: Vec<PointEntityLinks>,
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "kebab-case")]
+pub enum ReconciliationIssueKind {
+    MissingEntity,
+    WrongEntityKind,
+    GeometryChanged,
+    TextChanged,
+    LayerChanged,
+    MetadataChanged,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct ReconciliationIssue {
+    pub point_id: Uuid,
+    pub role: PointEntityRole,
+    pub entity: EntityId,
+    pub kind: ReconciliationIssueKind,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct ReconciliationReport {
+    pub project_id: Option<Uuid>,
+    pub points: usize,
+    pub healthy_points: usize,
+    pub missing_entities: usize,
+    pub modified_entities: usize,
+    pub orphaned_entities: usize,
+    pub issues: Vec<ReconciliationIssue>,
 }
 
 fn default_label_height() -> f64 {
@@ -138,8 +255,8 @@ impl Error for AdapterError {
     }
 }
 
-/// Portable host surface used by the current SurveyCraft commands.
-/// Implementations must make transactions undoable.
+/// Portable host surface used by SurveyCraft commands. Metadata is implicitly scoped to the
+/// running extension by CADCraft; implementations must make every transaction undoable.
 pub trait CadcraftHost {
     fn begin_transaction(&mut self, label: &str) -> Result<TransactionId, HostError>;
     fn create_line(
@@ -157,89 +274,249 @@ pub trait CadcraftHost {
         transaction: TransactionId,
         request: &TextRequest,
     ) -> Result<EntityId, HostError>;
+    fn get_drawing_metadata(&mut self, key: &str) -> Result<Option<String>, HostError>;
+    fn set_drawing_metadata(
+        &mut self,
+        transaction: TransactionId,
+        key: &str,
+        value: &str,
+    ) -> Result<(), HostError>;
+    fn remove_drawing_metadata(
+        &mut self,
+        transaction: TransactionId,
+        key: &str,
+    ) -> Result<(), HostError>;
+    fn get_entity(&mut self, entity: EntityId) -> Result<Option<EntityView>, HostError>;
+    fn get_entity_metadata(
+        &mut self,
+        entity: EntityId,
+        key: &str,
+    ) -> Result<Option<String>, HostError>;
+    fn find_entities_by_metadata(
+        &mut self,
+        key: &str,
+        value: &str,
+    ) -> Result<Vec<EntityView>, HostError>;
+    fn set_entity_metadata(
+        &mut self,
+        transaction: TransactionId,
+        entity: EntityId,
+        key: &str,
+        value: &str,
+    ) -> Result<(), HostError>;
+    fn remove_entity_metadata(
+        &mut self,
+        transaction: TransactionId,
+        entity: EntityId,
+        key: &str,
+    ) -> Result<(), HostError>;
+    fn update_point(
+        &mut self,
+        transaction: TransactionId,
+        entity: EntityId,
+        request: &PointRequest,
+    ) -> Result<(), HostError>;
+    fn update_text(
+        &mut self,
+        transaction: TransactionId,
+        entity: EntityId,
+        request: &TextRequest,
+    ) -> Result<(), HostError>;
+    fn delete_entity(
+        &mut self,
+        transaction: TransactionId,
+        entity: EntityId,
+    ) -> Result<(), HostError>;
     fn commit_transaction(&mut self, transaction: TransactionId) -> Result<(), HostError>;
     fn rollback_transaction(&mut self, transaction: TransactionId) -> Result<(), HostError>;
 }
 
-const MAX_INSERT_POINTS: usize = 2_000;
-const MAX_COORDINATE: f64 = 1.0e15;
-const MAX_POINT_NUMBER_BYTES: usize = 128;
-const MAX_CODE_BYTES: usize = 256;
-
-/// Validate and insert survey points, point numbers, elevations and optional codes in one undoable
-/// CAD transaction.
+/// Insert survey points and persist stable point/entity links in one undoable transaction.
 pub fn insert_points(
     host: &mut impl CadcraftHost,
     request: &InsertPointsRequest,
 ) -> Result<InsertPointsResult, AdapterError> {
     validate_insert_request(request)
         .map_err(|error| AdapterError::new("validate points", error, None))?;
+    let existing = load_drawing_project(host)?;
+    let mut stored = match existing {
+        Some(stored) => stored,
+        None => new_drawing_project(request)
+            .map_err(|error| AdapterError::new("create survey project", error, None))?,
+    };
+    reject_existing_numbers(&stored.project, request)
+        .map_err(|error| AdapterError::new("validate points", error, None))?;
+
     let transaction = host
         .begin_transaction("Insert SurveyCraft points")
         .map_err(|error| AdapterError::new("begin point transaction", error, None))?;
+    let original_points = stored.project.points.len();
     let mut entities = 0usize;
-    for row in &request.rows {
+    for (index, row) in request.rows.iter().enumerate() {
         let (cad_x, cad_y) = cad_xy(row, request.convention);
         let position = point(cad_x, cad_y, row.elevation)
             .map_err(|error| rollback_error(host, transaction, "prepare point", error))?;
-        create_point(
+        let point_id = drawing_point_id(stored.project.id, &row.number);
+        let point_entity = create_point_entity(
             host,
             transaction,
             &PointRequest {
                 position,
-                layer: "SC-POINTS".into(),
+                layer: stored.project.styles.point.layer.clone(),
             },
+        )?;
+        tag_entity(
+            host,
+            transaction,
+            point_entity,
+            stored.project.id,
+            point_id,
+            PointEntityRole::Point,
         )?;
         entities += 1;
 
-        let offset = request.label_height * 1.4;
-        let labels = [
-            (
-                row.number.trim().to_owned(),
-                offset,
-                offset,
-                "SC-POINT-NUMBERS",
-            ),
-            (
-                format!("{:.3}", row.elevation),
-                offset,
-                -offset,
-                "SC-POINT-ELEVATIONS",
-            ),
-        ];
-        for (value, dx, dy, layer) in labels {
-            let label_position = point(cad_x + dx, cad_y + dy, row.elevation)
-                .map_err(|error| rollback_error(host, transaction, "prepare point label", error))?;
-            create_text(
-                host,
-                transaction,
-                &TextRequest {
-                    position: label_position,
-                    value,
-                    height: request.label_height,
-                    rotation_degrees: 0.0,
-                    layer: layer.into(),
-                },
-            )?;
-            entities += 1;
-        }
-        if !row.code.trim().is_empty() {
-            let code_position = point(cad_x + offset, cad_y - offset * 2.4, row.elevation)
-                .map_err(|error| rollback_error(host, transaction, "prepare point code", error))?;
-            create_text(
+        let labels = &stored.project.styles.labels;
+        let number_position = point(
+            cad_x + labels.offset_x,
+            cad_y + labels.offset_y,
+            row.elevation,
+        )
+        .map_err(|error| rollback_error(host, transaction, "prepare point number", error))?;
+        let number_label = create_text_entity(
+            host,
+            transaction,
+            &TextRequest {
+                position: number_position,
+                value: row.number.trim().to_owned(),
+                height: labels.height,
+                rotation_degrees: 0.0,
+                layer: labels.number_layer.clone(),
+            },
+        )?;
+        tag_entity(
+            host,
+            transaction,
+            number_label,
+            stored.project.id,
+            point_id,
+            PointEntityRole::NumberLabel,
+        )?;
+        entities += 1;
+
+        let elevation_position = point(
+            cad_x + labels.offset_x,
+            cad_y - labels.offset_y,
+            row.elevation,
+        )
+        .map_err(|error| rollback_error(host, transaction, "prepare elevation label", error))?;
+        let elevation_label = create_text_entity(
+            host,
+            transaction,
+            &TextRequest {
+                position: elevation_position,
+                value: format!(
+                    "{:.*}",
+                    usize::from(labels.elevation_decimals),
+                    row.elevation
+                ),
+                height: labels.height,
+                rotation_degrees: 0.0,
+                layer: labels.elevation_layer.clone(),
+            },
+        )?;
+        tag_entity(
+            host,
+            transaction,
+            elevation_label,
+            stored.project.id,
+            point_id,
+            PointEntityRole::ElevationLabel,
+        )?;
+        entities += 1;
+
+        let code = row.code.trim();
+        let code_label = if code.is_empty() {
+            None
+        } else {
+            let code_position = point(
+                cad_x + labels.offset_x,
+                cad_y - labels.offset_y * 2.4,
+                row.elevation,
+            )
+            .map_err(|error| rollback_error(host, transaction, "prepare point code", error))?;
+            let entity = create_text_entity(
                 host,
                 transaction,
                 &TextRequest {
                     position: code_position,
-                    value: row.code.trim().to_owned(),
-                    height: request.label_height,
+                    value: code.to_owned(),
+                    height: labels.height,
                     rotation_degrees: 0.0,
-                    layer: "SC-POINT-CODES".into(),
+                    layer: labels.code_layer.clone(),
                 },
             )?;
+            tag_entity(
+                host,
+                transaction,
+                entity,
+                stored.project.id,
+                point_id,
+                PointEntityRole::CodeLabel,
+            )?;
             entities += 1;
-        }
+            Some(entity)
+        };
+
+        let source_row = original_points.saturating_add(index).saturating_add(1);
+        let survey_point = SurveyPoint::new(
+            point_id,
+            row.number.clone(),
+            position,
+            (!code.is_empty()).then(|| code.to_owned()),
+            None,
+            SourceRef {
+                source: "drawing-import".to_owned(),
+                row: source_row,
+            },
+        )
+        .map_err(|error| {
+            rollback_error(
+                host,
+                transaction,
+                "record survey point",
+                HostError::new(error.to_string()),
+            )
+        })?;
+        stored.project.add_point(survey_point);
+        stored.entity_links.push(PointEntityLinks {
+            point_id,
+            point: point_entity,
+            number_label,
+            elevation_label,
+            code_label,
+        });
     }
+
+    stored.project.validate().map_err(|error| {
+        rollback_error(
+            host,
+            transaction,
+            "validate survey project",
+            HostError::new(error.to_string()),
+        )
+    })?;
+    validate_drawing_project(&stored)
+        .map_err(|error| rollback_error(host, transaction, "validate entity links", error))?;
+    let metadata = serde_json::to_string(&stored).map_err(|error| {
+        rollback_error(
+            host,
+            transaction,
+            "encode survey project",
+            HostError::new(error.to_string()),
+        )
+    })?;
+    host.set_drawing_metadata(transaction, PROJECT_METADATA_KEY, &metadata)
+        .map_err(|error| rollback_error(host, transaction, "persist survey project", error))?;
     if let Err(error) = host.commit_transaction(transaction) {
         let rollback_error = host.rollback_transaction(transaction).err();
         return Err(AdapterError::new(
@@ -251,7 +528,374 @@ pub fn insert_points(
     Ok(InsertPointsResult {
         inserted: request.rows.len(),
         entities,
+        total_points: stored.project.points.len(),
+        project_id: stored.project.id,
     })
+}
+
+/// Report deleted or externally edited linked entities without changing the drawing.
+pub fn inspect_project(host: &mut impl CadcraftHost) -> Result<ReconciliationReport, AdapterError> {
+    let stored = load_drawing_project(host)?;
+    let report = match stored {
+        Some(stored) => reconcile(host, &stored)?,
+        None => ReconciliationReport {
+            project_id: None,
+            points: 0,
+            healthy_points: 0,
+            missing_entities: 0,
+            modified_entities: 0,
+            orphaned_entities: 0,
+            issues: Vec::new(),
+        },
+    };
+    let transaction = host
+        .begin_transaction("Inspect SurveyCraft point links")
+        .map_err(|error| AdapterError::new("begin inspection transaction", error, None))?;
+    if let Err(error) = host.commit_transaction(transaction) {
+        let rollback_error = host.rollback_transaction(transaction).err();
+        return Err(AdapterError::new(
+            "commit inspection transaction",
+            error,
+            rollback_error,
+        ));
+    }
+    Ok(report)
+}
+
+fn load_drawing_project(
+    host: &mut impl CadcraftHost,
+) -> Result<Option<DrawingSurveyProject>, AdapterError> {
+    let Some(json) = host
+        .get_drawing_metadata(PROJECT_METADATA_KEY)
+        .map_err(|error| AdapterError::new("read survey project", error, None))?
+    else {
+        return Ok(None);
+    };
+    let mut stored: DrawingSurveyProject = serde_json::from_str(&json).map_err(|error| {
+        AdapterError::new(
+            "decode survey project",
+            HostError::new(error.to_string()),
+            None,
+        )
+    })?;
+    if stored.schema_version != DRAWING_PROJECT_SCHEMA_VERSION {
+        return Err(AdapterError::new(
+            "decode survey project",
+            HostError::new(format!(
+                "unsupported drawing metadata schema {}",
+                stored.schema_version
+            )),
+            None,
+        ));
+    }
+    stored.project = migrate_project(stored.project).map_err(|error| {
+        AdapterError::new(
+            "migrate survey project",
+            HostError::new(error.to_string()),
+            None,
+        )
+    })?;
+    validate_drawing_project(&stored)
+        .map_err(|error| AdapterError::new("validate entity links", error, None))?;
+    Ok(Some(stored))
+}
+
+fn new_drawing_project(request: &InsertPointsRequest) -> Result<DrawingSurveyProject, HostError> {
+    let project_id = initial_project_id(request);
+    let mut project = SurveyProject::new(
+        project_id,
+        "SurveyCraft drawing",
+        Crs::local_engineering(),
+        LinearUnit::Metre,
+        NumericPolicy::default(),
+    )
+    .map_err(|error| HostError::new(error.to_string()))?;
+    project.styles.labels.height = request.label_height;
+    project.styles.labels.offset_x = request.label_height * 1.4;
+    project.styles.labels.offset_y = request.label_height * 1.4;
+    Ok(DrawingSurveyProject {
+        schema_version: DRAWING_PROJECT_SCHEMA_VERSION,
+        project,
+        entity_links: Vec::new(),
+    })
+}
+
+fn initial_project_id(request: &InsertPointsRequest) -> Uuid {
+    let mut seed = String::from("surveycraft-drawing-v2");
+    for row in &request.rows {
+        seed.push('|');
+        seed.push_str(&row.number.trim().to_lowercase());
+        seed.push(':');
+        seed.push_str(&format!(
+            "{:016x}:{:016x}:{:016x}",
+            row.x.to_bits(),
+            row.y.to_bits(),
+            row.elevation.to_bits()
+        ));
+    }
+    Uuid::new_v5(&Uuid::NAMESPACE_URL, seed.as_bytes())
+}
+
+fn drawing_point_id(project_id: Uuid, number: &str) -> Uuid {
+    Uuid::new_v5(
+        &project_id,
+        format!("drawing-point:{}", number.trim().to_lowercase()).as_bytes(),
+    )
+}
+
+fn reject_existing_numbers(
+    project: &SurveyProject,
+    request: &InsertPointsRequest,
+) -> Result<(), HostError> {
+    let existing: BTreeSet<String> = project
+        .points
+        .iter()
+        .map(|point| point.number.to_lowercase())
+        .collect();
+    if let Some(number) = request
+        .rows
+        .iter()
+        .map(|row| row.number.trim())
+        .find(|number| existing.contains(&number.to_lowercase()))
+    {
+        Err(HostError::new(format!(
+            "point number '{number}' already exists in this drawing"
+        )))
+    } else {
+        Ok(())
+    }
+}
+
+fn validate_drawing_project(stored: &DrawingSurveyProject) -> Result<(), HostError> {
+    if stored.schema_version != DRAWING_PROJECT_SCHEMA_VERSION {
+        return Err(HostError::new(format!(
+            "unsupported drawing metadata schema {}",
+            stored.schema_version
+        )));
+    }
+    stored
+        .project
+        .validate()
+        .map_err(|error| HostError::new(error.to_string()))?;
+    if stored.project.points.len() != stored.entity_links.len() {
+        return Err(HostError::new(
+            "every survey point must have exactly one entity-link record",
+        ));
+    }
+    let point_ids: HashSet<Uuid> = stored.project.points.iter().map(|point| point.id).collect();
+    let mut linked_points = HashSet::new();
+    let mut entities = BTreeSet::new();
+    for links in &stored.entity_links {
+        if !point_ids.contains(&links.point_id) || !linked_points.insert(links.point_id) {
+            return Err(HostError::new(
+                "entity links contain an unknown or duplicate point id",
+            ));
+        }
+        for (_, entity) in links.roles() {
+            if let Some(entity) = entity
+                && !entities.insert(entity)
+            {
+                return Err(HostError::new(
+                    "one CAD entity is linked to more than one point role",
+                ));
+            }
+        }
+    }
+    Ok(())
+}
+
+fn tag_entity(
+    host: &mut impl CadcraftHost,
+    transaction: TransactionId,
+    entity: EntityId,
+    project_id: Uuid,
+    point_id: Uuid,
+    role: PointEntityRole,
+) -> Result<(), AdapterError> {
+    for (key, value) in [
+        (PROJECT_ID_METADATA_KEY, project_id.to_string()),
+        (POINT_ID_METADATA_KEY, point_id.to_string()),
+        (ROLE_METADATA_KEY, role.metadata_value().to_owned()),
+    ] {
+        host.set_entity_metadata(transaction, entity, key, &value)
+            .map_err(|error| rollback_error(host, transaction, "tag survey entity", error))?;
+    }
+    Ok(())
+}
+
+fn reconcile(
+    host: &mut impl CadcraftHost,
+    stored: &DrawingSurveyProject,
+) -> Result<ReconciliationReport, AdapterError> {
+    let by_id: BTreeMap<Uuid, &SurveyPoint> = stored
+        .project
+        .points
+        .iter()
+        .map(|point| (point.id, point))
+        .collect();
+    let linked_entities: BTreeSet<EntityId> = stored
+        .entity_links
+        .iter()
+        .flat_map(|links| links.roles().into_iter().filter_map(|(_, id)| id))
+        .collect();
+    let mut issues = Vec::new();
+    let mut unhealthy = HashSet::new();
+    let mut missing_entities = 0usize;
+    let mut modified_entities = 0usize;
+    for links in &stored.entity_links {
+        let Some(point) = by_id.get(&links.point_id).copied() else {
+            continue;
+        };
+        for (role, entity_id) in links.roles() {
+            let Some(entity_id) = entity_id else { continue };
+            let actual = host
+                .get_entity(entity_id)
+                .map_err(|error| AdapterError::new("read linked entity", error, None))?;
+            let Some(actual) = actual else {
+                missing_entities += 1;
+                unhealthy.insert(point.id);
+                issues.push(ReconciliationIssue {
+                    point_id: point.id,
+                    role,
+                    entity: entity_id,
+                    kind: ReconciliationIssueKind::MissingEntity,
+                });
+                continue;
+            };
+            let expected = expected_entity(point, role, &stored.project);
+            let before = issues.len();
+            compare_entity(
+                point.id,
+                role,
+                entity_id,
+                &actual,
+                &expected,
+                stored.project.numeric_policy.coordinate_tolerance,
+                &mut issues,
+            );
+            let point_id_value = point.id.to_string();
+            let point_metadata = host
+                .get_entity_metadata(entity_id, POINT_ID_METADATA_KEY)
+                .map_err(|error| AdapterError::new("read linked entity metadata", error, None))?;
+            let role_value = host
+                .get_entity_metadata(entity_id, ROLE_METADATA_KEY)
+                .map_err(|error| AdapterError::new("read linked entity metadata", error, None))?;
+            if point_metadata.as_deref() != Some(point_id_value.as_str())
+                || role_value.as_deref() != Some(role.metadata_value())
+            {
+                issues.push(ReconciliationIssue {
+                    point_id: point.id,
+                    role,
+                    entity: entity_id,
+                    kind: ReconciliationIssueKind::MetadataChanged,
+                });
+            }
+            if issues.len() > before {
+                modified_entities += 1;
+                unhealthy.insert(point.id);
+            }
+        }
+    }
+    let project_id = stored.project.id.to_string();
+    let orphaned_entities = host
+        .find_entities_by_metadata(PROJECT_ID_METADATA_KEY, &project_id)
+        .map_err(|error| AdapterError::new("find survey entities", error, None))?
+        .into_iter()
+        .filter(|entity| !linked_entities.contains(&entity.id))
+        .count();
+    Ok(ReconciliationReport {
+        project_id: Some(stored.project.id),
+        points: stored.project.points.len(),
+        healthy_points: stored.project.points.len().saturating_sub(unhealthy.len()),
+        missing_entities,
+        modified_entities,
+        orphaned_entities,
+        issues,
+    })
+}
+
+fn expected_entity(
+    point: &SurveyPoint,
+    role: PointEntityRole,
+    project: &SurveyProject,
+) -> EntityView {
+    let labels = &project.styles.labels;
+    let position = point.position;
+    match role {
+        PointEntityRole::Point => EntityView {
+            id: EntityId(0),
+            kind: EntityKind::Point,
+            layer: project.styles.point.layer.clone(),
+            position: Some(position),
+            value: None,
+        },
+        PointEntityRole::NumberLabel => EntityView {
+            id: EntityId(0),
+            kind: EntityKind::Text,
+            layer: labels.number_layer.clone(),
+            position: offset_point(position, labels.offset_x, labels.offset_y),
+            value: Some(point.number.clone()),
+        },
+        PointEntityRole::ElevationLabel => EntityView {
+            id: EntityId(0),
+            kind: EntityKind::Text,
+            layer: labels.elevation_layer.clone(),
+            position: offset_point(position, labels.offset_x, -labels.offset_y),
+            value: Some(format!(
+                "{:.*}",
+                usize::from(labels.elevation_decimals),
+                position.z()
+            )),
+        },
+        PointEntityRole::CodeLabel => EntityView {
+            id: EntityId(0),
+            kind: EntityKind::Text,
+            layer: labels.code_layer.clone(),
+            position: offset_point(position, labels.offset_x, -labels.offset_y * 2.4),
+            value: point.code.clone(),
+        },
+    }
+}
+
+fn offset_point(position: Point3, dx: f64, dy: f64) -> Option<Point3> {
+    Point3::new(position.x() + dx, position.y() + dy, position.z()).ok()
+}
+
+fn compare_entity(
+    point_id: Uuid,
+    role: PointEntityRole,
+    entity_id: EntityId,
+    actual: &EntityView,
+    expected: &EntityView,
+    tolerance: f64,
+    issues: &mut Vec<ReconciliationIssue>,
+) {
+    let mut note = |kind| {
+        issues.push(ReconciliationIssue {
+            point_id,
+            role,
+            entity: entity_id,
+            kind,
+        })
+    };
+    if actual.kind != expected.kind {
+        note(ReconciliationIssueKind::WrongEntityKind);
+        return;
+    }
+    if !actual.layer.eq_ignore_ascii_case(&expected.layer) {
+        note(ReconciliationIssueKind::LayerChanged);
+    }
+    if let (Some(actual), Some(expected)) = (actual.position, expected.position) {
+        let changed = (actual.x() - expected.x()).abs() > tolerance
+            || (actual.y() - expected.y()).abs() > tolerance
+            || (actual.z() - expected.z()).abs() > tolerance;
+        if changed {
+            note(ReconciliationIssueKind::GeometryChanged);
+        }
+    }
+    if actual.value != expected.value {
+        note(ReconciliationIssueKind::TextChanged);
+    }
 }
 
 fn cad_xy(row: &PointRow, convention: CoordinateConvention) -> (f64, f64) {
@@ -296,19 +940,14 @@ fn validate_insert_request(request: &InsertPointsRequest) -> Result<(), HostErro
                 index + 1
             )));
         }
-        point(row.x, row.y, row.elevation).map_err(|_| {
-            HostError::new(format!(
-                "row {} has coordinates outside the supported drawing range",
-                index + 1
-            ))
-        })?;
+        let (cad_x, cad_y) = cad_xy(row, request.convention);
+        point(cad_x, cad_y, row.elevation)?;
     }
     Ok(())
 }
 
 fn point(cad_x: f64, cad_y: f64, elevation: f64) -> Result<Point3, HostError> {
-    let values = [cad_x, cad_y, elevation];
-    if values
+    if [cad_x, cad_y, elevation]
         .iter()
         .any(|value| !value.is_finite() || value.abs() > MAX_COORDINATE)
     {
@@ -319,7 +958,7 @@ fn point(cad_x: f64, cad_y: f64, elevation: f64) -> Result<Point3, HostError> {
     Point3::new(cad_x, cad_y, elevation).map_err(|error| HostError::new(error.to_string()))
 }
 
-fn create_point(
+fn create_point_entity(
     host: &mut impl CadcraftHost,
     transaction: TransactionId,
     request: &PointRequest,
@@ -328,7 +967,7 @@ fn create_point(
         .map_err(|error| rollback_error(host, transaction, "create point", error))
 }
 
-fn create_text(
+fn create_text_entity(
     host: &mut impl CadcraftHost,
     transaction: TransactionId,
     request: &TextRequest,
@@ -347,7 +986,7 @@ fn rollback_error(
     AdapterError::new(operation, error, rollback_error)
 }
 
-/// Proves one entity can cross the proposed host boundary in a guarded transaction.
+/// Proves one entity can cross the host boundary in a guarded transaction.
 pub fn run_reference_extension(
     host: &mut impl CadcraftHost,
     request: &LineRequest,
@@ -355,15 +994,9 @@ pub fn run_reference_extension(
     let transaction = host
         .begin_transaction("SurveyCraft reference line")
         .map_err(|error| AdapterError::new("begin transaction", error, None))?;
-
-    let entity = match host.create_line(transaction, request) {
-        Ok(entity) => entity,
-        Err(error) => {
-            let rollback_error = host.rollback_transaction(transaction).err();
-            return Err(AdapterError::new("create line", error, rollback_error));
-        }
-    };
-
+    let entity = host
+        .create_line(transaction, request)
+        .map_err(|error| rollback_error(host, transaction, "create line", error))?;
     if let Err(error) = host.commit_transaction(transaction) {
         let rollback_error = host.rollback_transaction(transaction).err();
         return Err(AdapterError::new(
@@ -377,17 +1010,41 @@ pub fn run_reference_extension(
 
 #[cfg(test)]
 mod tests {
-    use super::{
-        CadcraftHost, EntityId, HostError, LineRequest, TransactionId, run_reference_extension,
-    };
-    use std::error::Error;
-    use surveycraft_geometry::Point3;
+    use super::*;
 
-    #[derive(Default)]
+    #[derive(Clone, Default)]
     struct MockHost {
         events: Vec<&'static str>,
-        points: Vec<Point3>,
+        entities: BTreeMap<EntityId, EntityView>,
+        entity_metadata: BTreeMap<EntityId, BTreeMap<String, String>>,
+        drawing_metadata: BTreeMap<String, String>,
+        next_id: u64,
         fail_create: bool,
+    }
+
+    impl MockHost {
+        fn allocate(
+            &mut self,
+            kind: EntityKind,
+            layer: &str,
+            position: Option<Point3>,
+            value: Option<String>,
+        ) -> EntityId {
+            self.next_id = self.next_id.max(100);
+            let id = EntityId(self.next_id);
+            self.next_id = self.next_id.saturating_add(1);
+            self.entities.insert(
+                id,
+                EntityView {
+                    id,
+                    kind,
+                    layer: layer.to_owned(),
+                    position,
+                    value,
+                },
+            );
+            id
+        }
     }
 
     impl CadcraftHost for MockHost {
@@ -399,37 +1056,165 @@ mod tests {
         fn create_line(
             &mut self,
             _transaction: TransactionId,
-            _request: &LineRequest,
+            request: &LineRequest,
         ) -> Result<EntityId, HostError> {
             self.events.push("create");
             if self.fail_create {
                 Err(HostError::new("synthetic create failure"))
             } else {
-                Ok(EntityId(42))
+                Ok(self.allocate(EntityKind::Line, &request.layer, None, None))
             }
         }
 
         fn create_point(
             &mut self,
             _transaction: TransactionId,
-            request: &super::PointRequest,
+            request: &PointRequest,
         ) -> Result<EntityId, HostError> {
             self.events.push("create-point");
             if self.fail_create {
                 Err(HostError::new("synthetic create failure"))
             } else {
-                self.points.push(request.position);
-                Ok(EntityId(43))
+                Ok(self.allocate(
+                    EntityKind::Point,
+                    &request.layer,
+                    Some(request.position),
+                    None,
+                ))
             }
         }
 
         fn create_text(
             &mut self,
             _transaction: TransactionId,
-            _request: &super::TextRequest,
+            request: &TextRequest,
         ) -> Result<EntityId, HostError> {
             self.events.push("create-text");
-            Ok(EntityId(44))
+            Ok(self.allocate(
+                EntityKind::Text,
+                &request.layer,
+                Some(request.position),
+                Some(request.value.clone()),
+            ))
+        }
+
+        fn get_drawing_metadata(&mut self, key: &str) -> Result<Option<String>, HostError> {
+            Ok(self.drawing_metadata.get(key).cloned())
+        }
+
+        fn set_drawing_metadata(
+            &mut self,
+            _transaction: TransactionId,
+            key: &str,
+            value: &str,
+        ) -> Result<(), HostError> {
+            self.drawing_metadata
+                .insert(key.to_owned(), value.to_owned());
+            Ok(())
+        }
+
+        fn remove_drawing_metadata(
+            &mut self,
+            _transaction: TransactionId,
+            key: &str,
+        ) -> Result<(), HostError> {
+            self.drawing_metadata.remove(key);
+            Ok(())
+        }
+
+        fn get_entity(&mut self, entity: EntityId) -> Result<Option<EntityView>, HostError> {
+            Ok(self.entities.get(&entity).cloned())
+        }
+
+        fn get_entity_metadata(
+            &mut self,
+            entity: EntityId,
+            key: &str,
+        ) -> Result<Option<String>, HostError> {
+            Ok(self
+                .entity_metadata
+                .get(&entity)
+                .and_then(|data| data.get(key))
+                .cloned())
+        }
+
+        fn find_entities_by_metadata(
+            &mut self,
+            key: &str,
+            value: &str,
+        ) -> Result<Vec<EntityView>, HostError> {
+            Ok(self
+                .entity_metadata
+                .iter()
+                .filter(|(_, data)| data.get(key).is_some_and(|stored| stored == value))
+                .filter_map(|(id, _)| self.entities.get(id).cloned())
+                .collect())
+        }
+
+        fn set_entity_metadata(
+            &mut self,
+            _transaction: TransactionId,
+            entity: EntityId,
+            key: &str,
+            value: &str,
+        ) -> Result<(), HostError> {
+            self.entity_metadata
+                .entry(entity)
+                .or_default()
+                .insert(key.to_owned(), value.to_owned());
+            Ok(())
+        }
+
+        fn remove_entity_metadata(
+            &mut self,
+            _transaction: TransactionId,
+            entity: EntityId,
+            key: &str,
+        ) -> Result<(), HostError> {
+            if let Some(data) = self.entity_metadata.get_mut(&entity) {
+                data.remove(key);
+            }
+            Ok(())
+        }
+
+        fn update_point(
+            &mut self,
+            _transaction: TransactionId,
+            entity: EntityId,
+            request: &PointRequest,
+        ) -> Result<(), HostError> {
+            let Some(view) = self.entities.get_mut(&entity) else {
+                return Err(HostError::new("missing entity"));
+            };
+            view.kind = EntityKind::Point;
+            view.layer = request.layer.clone();
+            view.position = Some(request.position);
+            Ok(())
+        }
+
+        fn update_text(
+            &mut self,
+            _transaction: TransactionId,
+            entity: EntityId,
+            request: &TextRequest,
+        ) -> Result<(), HostError> {
+            let Some(view) = self.entities.get_mut(&entity) else {
+                return Err(HostError::new("missing entity"));
+            };
+            view.kind = EntityKind::Text;
+            view.layer = request.layer.clone();
+            view.position = Some(request.position);
+            view.value = Some(request.value.clone());
+            Ok(())
+        }
+
+        fn delete_entity(
+            &mut self,
+            _transaction: TransactionId,
+            entity: EntityId,
+        ) -> Result<(), HostError> {
+            self.entities.remove(&entity);
+            Ok(())
         }
 
         fn commit_transaction(&mut self, _transaction: TransactionId) -> Result<(), HostError> {
@@ -443,137 +1228,110 @@ mod tests {
         }
     }
 
-    fn request() -> Result<LineRequest, Box<dyn Error>> {
-        Ok(LineRequest {
-            start: Point3::new(0.0, 0.0, 0.0)?,
-            end: Point3::new(10.0, 5.0, 0.0)?,
-            layer: "SURVEY_REFERENCE".to_owned(),
-        })
-    }
-
-    #[test]
-    fn commits_a_successful_entity_creation() -> Result<(), Box<dyn Error>> {
-        let mut host = MockHost::default();
-        let entity = run_reference_extension(&mut host, &request()?)?;
-        assert_eq!(entity, EntityId(42));
-        assert_eq!(host.events, ["begin", "create", "commit"]);
-        Ok(())
-    }
-
-    #[test]
-    fn rolls_back_a_failed_entity_creation() -> Result<(), Box<dyn Error>> {
-        let mut host = MockHost {
-            fail_create: true,
-            ..MockHost::default()
-        };
-        let result = run_reference_extension(&mut host, &request()?);
-        assert!(result.is_err());
-        assert_eq!(host.events, ["begin", "create", "rollback"]);
-        Ok(())
-    }
-
-    #[test]
-    fn inserts_point_geometry_and_labels_in_one_transaction() -> Result<(), Box<dyn Error>> {
-        let mut host = MockHost::default();
-        let request = super::InsertPointsRequest {
-            rows: vec![super::PointRow {
+    fn request() -> InsertPointsRequest {
+        InsertPointsRequest {
+            rows: vec![PointRow {
                 number: "101".into(),
                 x: 500.0,
                 y: 200.0,
                 elevation: 12.5,
                 code: "STN".into(),
             }],
-            convention: super::CoordinateConvention::CadXy,
+            convention: CoordinateConvention::CadXy,
             label_height: 0.25,
-        };
-        let result = super::insert_points(&mut host, &request)?;
-        assert_eq!(
-            result,
-            super::InsertPointsResult {
-                inserted: 1,
-                entities: 4
-            }
-        );
-        assert_eq!(
-            host.events,
-            [
-                "begin",
-                "create-point",
-                "create-text",
-                "create-text",
-                "create-text",
-                "commit"
-            ]
-        );
-        assert_eq!(host.points, [Point3::new(500.0, 200.0, 12.5)?]);
+        }
+    }
+
+    #[test]
+    fn inserts_and_persists_point_identity() -> Result<(), Box<dyn Error>> {
+        let mut host = MockHost::default();
+        let result = insert_points(&mut host, &request())?;
+        assert_eq!(result.inserted, 1);
+        assert_eq!(result.entities, 4);
+        assert_eq!(result.total_points, 1);
+        assert!(host.drawing_metadata.contains_key(PROJECT_METADATA_KEY));
+
+        let report = inspect_project(&mut host)?;
+        assert_eq!(report.points, 1);
+        assert_eq!(report.healthy_points, 1);
+        assert!(report.issues.is_empty());
         Ok(())
     }
 
     #[test]
-    fn rejects_duplicate_point_numbers_before_opening_a_transaction() {
+    fn reconciliation_reports_deleted_and_edited_entities() -> Result<(), Box<dyn Error>> {
         let mut host = MockHost::default();
-        let request = super::InsertPointsRequest {
-            rows: vec![
-                super::PointRow {
-                    number: "P-1".into(),
-                    x: 500.0,
-                    y: 200.0,
-                    elevation: 12.5,
-                    code: String::new(),
-                },
-                super::PointRow {
-                    number: "p-1".into(),
-                    x: 501.0,
-                    y: 201.0,
-                    elevation: 12.6,
-                    code: String::new(),
-                },
-            ],
-            convention: super::CoordinateConvention::CadXy,
-            label_height: 0.25,
-        };
+        insert_points(&mut host, &request())?;
+        let metadata = host
+            .drawing_metadata
+            .get(PROJECT_METADATA_KEY)
+            .cloned()
+            .ok_or("missing project metadata")?;
+        let stored: DrawingSurveyProject = serde_json::from_str(&metadata)?;
+        let links = stored.entity_links.first().ok_or("missing links")?;
+        host.entities.remove(&links.number_label);
+        if let Some(point) = host.entities.get_mut(&links.point) {
+            point.position = Some(Point3::new(501.0, 200.0, 12.5)?);
+        }
 
-        let result = super::insert_points(&mut host, &request);
-        assert!(result.is_err());
-        assert!(host.events.is_empty());
+        let report = inspect_project(&mut host)?;
+        assert_eq!(report.healthy_points, 0);
+        assert_eq!(report.missing_entities, 1);
+        assert!(report.modified_entities >= 1);
+        assert!(
+            report
+                .issues
+                .iter()
+                .any(|issue| issue.kind == ReconciliationIssueKind::MissingEntity)
+        );
+        assert!(
+            report
+                .issues
+                .iter()
+                .any(|issue| issue.kind == ReconciliationIssueKind::GeometryChanged)
+        );
+        Ok(())
     }
 
     #[test]
-    fn romanian_survey_y_becomes_cad_x_without_transposing_the_outline()
-    -> Result<(), Box<dyn Error>> {
-        let coordinates = [
-            ("L1", 595_286.485, 337_275.053),
-            ("L2", 595_309.544, 337_337.121),
-            ("L3", 595_394.773, 337_305.449),
-            ("L4", 595_384.907, 337_284.954),
-            ("L5", 595_467.684, 337_254.194),
-            ("L6", 595_448.704, 337_214.771),
-        ];
-        let request = super::InsertPointsRequest {
-            rows: coordinates
-                .iter()
-                .map(|(number, survey_y, survey_x)| super::PointRow {
-                    number: (*number).into(),
-                    x: *survey_x,
-                    y: *survey_y,
-                    elevation: 0.0,
-                    code: String::new(),
-                })
-                .collect(),
-            convention: super::CoordinateConvention::SurveyXy,
-            label_height: 0.25,
-        };
+    fn rejects_existing_point_numbers_without_creating_entities() -> Result<(), Box<dyn Error>> {
         let mut host = MockHost::default();
+        insert_points(&mut host, &request())?;
+        let before = host.entities.len();
+        let result = insert_points(&mut host, &request());
+        assert!(result.is_err());
+        assert_eq!(host.entities.len(), before);
+        Ok(())
+    }
 
-        super::insert_points(&mut host, &request)?;
+    #[test]
+    fn survey_y_becomes_cad_x() -> Result<(), Box<dyn Error>> {
+        let mut host = MockHost::default();
+        let mut input = request();
+        input.convention = CoordinateConvention::SurveyXy;
+        insert_points(&mut host, &input)?;
+        let point = host
+            .entities
+            .values()
+            .find(|entity| entity.kind == EntityKind::Point)
+            .and_then(|entity| entity.position);
+        assert_eq!(point, Some(Point3::new(200.0, 500.0, 12.5)?));
+        Ok(())
+    }
 
-        let expected = coordinates
-            .iter()
-            .map(|(_, survey_y, survey_x)| Point3::new(*survey_y, *survey_x, 0.0))
-            .collect::<Result<Vec<_>, _>>()?;
-        assert_eq!(host.points, expected);
-        assert!(host.points[0].x() < host.points[4].x());
-        assert!(host.points[1].x() < host.points[5].x());
+    #[test]
+    fn reference_extension_rolls_back_on_create_failure() -> Result<(), Box<dyn Error>> {
+        let mut host = MockHost {
+            fail_create: true,
+            ..MockHost::default()
+        };
+        let line = LineRequest {
+            start: Point3::new(0.0, 0.0, 0.0)?,
+            end: Point3::new(1.0, 1.0, 0.0)?,
+            layer: "0".into(),
+        };
+        assert!(run_reference_extension(&mut host, &line).is_err());
+        assert_eq!(host.events, ["begin", "create", "rollback"]);
         Ok(())
     }
 }

@@ -11,12 +11,13 @@ mod component {
 
     use cadcraft::extension::drawing;
     use cadcraft::extension::geometry::{
-        LineRequest as WitLineRequest, Point3 as WitPoint3, PointRequest as WitPointRequest,
-        TextRequest as WitTextRequest,
+        EntityKind as WitEntityKind, EntityView as WitEntityView, LineRequest as WitLineRequest,
+        Point3 as WitPoint3, PointRequest as WitPointRequest, TextRequest as WitTextRequest,
     };
     use surveycraft_cadcraft::{
-        CadcraftHost, EntityId, HostError, InsertPointsRequest, LineRequest, PointRequest,
-        TextRequest, TransactionId, insert_points, run_reference_extension,
+        CadcraftHost, EntityId, EntityKind, EntityView, HostError, InsertPointsRequest,
+        LineRequest, PointRequest, TextRequest, TransactionId, insert_points, inspect_project,
+        run_reference_extension,
     };
     use surveycraft_geometry::Point3;
 
@@ -33,6 +34,11 @@ mod component {
                         insert_points(&mut host, &request).map_err(|error| error.to_string())?;
                     serde_json::to_string(&result)
                         .map_err(|error| format!("cannot encode insertion result: {error}"))
+                }
+                "inspect-project" => {
+                    let result = inspect_project(&mut host).map_err(|error| error.to_string())?;
+                    serde_json::to_string(&result)
+                        .map_err(|error| format!("cannot encode inspection result: {error}"))
                 }
                 "reference-line" => {
                     let request = LineRequest {
@@ -104,6 +110,110 @@ mod component {
                 .map_err(host_error)
         }
 
+        fn get_drawing_metadata(&mut self, key: &str) -> Result<Option<String>, HostError> {
+            drawing::get_drawing_metadata(key).map_err(host_error)
+        }
+
+        fn set_drawing_metadata(
+            &mut self,
+            transaction: TransactionId,
+            key: &str,
+            value: &str,
+        ) -> Result<(), HostError> {
+            drawing::set_drawing_metadata(transaction.0, key, value).map_err(host_error)
+        }
+
+        fn remove_drawing_metadata(
+            &mut self,
+            transaction: TransactionId,
+            key: &str,
+        ) -> Result<(), HostError> {
+            drawing::remove_drawing_metadata(transaction.0, key).map_err(host_error)
+        }
+
+        fn get_entity(&mut self, entity: EntityId) -> Result<Option<EntityView>, HostError> {
+            drawing::get_entity(entity.0)
+                .map_err(host_error)?
+                .map(entity_view)
+                .transpose()
+        }
+
+        fn get_entity_metadata(
+            &mut self,
+            entity: EntityId,
+            key: &str,
+        ) -> Result<Option<String>, HostError> {
+            drawing::get_entity_metadata(entity.0, key).map_err(host_error)
+        }
+
+        fn find_entities_by_metadata(
+            &mut self,
+            key: &str,
+            value: &str,
+        ) -> Result<Vec<EntityView>, HostError> {
+            drawing::find_entities_by_metadata(key, value)
+                .map_err(host_error)?
+                .into_iter()
+                .map(entity_view)
+                .collect()
+        }
+
+        fn set_entity_metadata(
+            &mut self,
+            transaction: TransactionId,
+            entity: EntityId,
+            key: &str,
+            value: &str,
+        ) -> Result<(), HostError> {
+            drawing::set_entity_metadata(transaction.0, entity.0, key, value).map_err(host_error)
+        }
+
+        fn remove_entity_metadata(
+            &mut self,
+            transaction: TransactionId,
+            entity: EntityId,
+            key: &str,
+        ) -> Result<(), HostError> {
+            drawing::remove_entity_metadata(transaction.0, entity.0, key).map_err(host_error)
+        }
+
+        fn update_point(
+            &mut self,
+            transaction: TransactionId,
+            entity: EntityId,
+            request: &PointRequest,
+        ) -> Result<(), HostError> {
+            let request = WitPointRequest {
+                position: wit_point(request.position),
+                layer: request.layer.clone(),
+            };
+            drawing::update_point(transaction.0, entity.0, &request).map_err(host_error)
+        }
+
+        fn update_text(
+            &mut self,
+            transaction: TransactionId,
+            entity: EntityId,
+            request: &TextRequest,
+        ) -> Result<(), HostError> {
+            let request = WitTextRequest {
+                position: wit_point(request.position),
+                value: request.value.clone(),
+                height: request.height,
+                rotation_degrees: request.rotation_degrees,
+                layer: request.layer.clone(),
+            };
+            drawing::update_text(transaction.0, entity.0, &request).map_err(host_error)
+        }
+
+        fn delete_entity(
+            &mut self,
+            transaction: TransactionId,
+            entity: EntityId,
+        ) -> Result<(), HostError> {
+            drawing::delete_entity(transaction.0, entity.0).map_err(host_error)
+        }
+
         fn commit_transaction(&mut self, transaction: TransactionId) -> Result<(), HostError> {
             drawing::commit_transaction(transaction.0).map_err(host_error)
         }
@@ -119,6 +229,29 @@ mod component {
             y: point.y(),
             z: point.z(),
         }
+    }
+
+    fn entity_view(view: WitEntityView) -> Result<EntityView, HostError> {
+        let position = view
+            .position
+            .map(|point| {
+                Point3::new(point.x, point.y, point.z)
+                    .map_err(|error| HostError::new(error.to_string()))
+            })
+            .transpose()?;
+        let kind = match view.kind {
+            WitEntityKind::Line => EntityKind::Line,
+            WitEntityKind::Point => EntityKind::Point,
+            WitEntityKind::Text => EntityKind::Text,
+            WitEntityKind::Other => EntityKind::Other,
+        };
+        Ok(EntityView {
+            id: EntityId(view.id),
+            kind,
+            layer: view.layer,
+            position,
+            value: view.value,
+        })
     }
 
     fn host_error(error: drawing::HostError) -> HostError {

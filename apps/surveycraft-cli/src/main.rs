@@ -258,7 +258,7 @@ fn print_utf8(bytes: &[u8]) -> Result<(), CliError> {
 
 fn print_help() {
     println!(
-        "SurveyCraft Phase 0 CLI\n\n\
+        "SurveyCraft CLI\n\n\
          Usage:\n  \
          surveycraft validate <points.csv> [--name NAME] [--project-id UUID]\n  \
          surveycraft import <points.csv> --output <project.json> [--name NAME] [--project-id UUID]\n  \

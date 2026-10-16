@@ -66,11 +66,22 @@ SurveyCraft creates missing layers through the CADCraft host. All entities from 
 staged together. If any host operation fails, nothing is added; after success, one Undo removes the
 complete insertion.
 
+## Persistent identity and link checks
+
+Every inserted point receives a stable UUID. SurveyCraft stores the logical project, initial point
+and label styles, and the exact CAD entity handles inside the drawing. Each point and label is also
+tagged with its project UUID, point UUID and role. Saving and reopening a supported drawing keeps
+these relationships intact.
+
+Run **SurveyCraft > Points > Check point links**, press its Tool Sets button, or type
+`SCCHECKPOINTS` to compare the stored project with the current CAD entities. The report distinguishes
+missing entities, changed geometry/text/layers, damaged metadata and unlinked SurveyCraft entities.
+It does not silently repair or overwrite external edits.
+
 ## Current MVP limits
 
 - Input text must be UTF-8.
-- Labels use a fixed default height and fixed SurveyCraft layers.
-- Points do not yet carry persistent SurveyCraft identity metadata.
-- Editing, renumbering, point styles and code-book rules belong to the upcoming Point Manager.
+- Point and label styles are persisted but do not yet have a settings editor.
+- Editing, renumbering, interactive repair and code-book rules belong to the upcoming Point Manager.
 
 These limits are explicit so drawings created by the MVP remain understandable and reversible.

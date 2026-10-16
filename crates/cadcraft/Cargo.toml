@@ -9,7 +9,10 @@ authors.workspace = true
 
 [dependencies]
 serde.workspace = true
+serde_json.workspace = true
+surveycraft-core = { path = "../core" }
 surveycraft-geometry = { path = "../geometry" }
+uuid.workspace = true
 
 [lints]
 workspace = true

@@ -13,8 +13,8 @@ The product phases and clean-room engineering constraints remain defined in
 | Version | Product phase | Status | Usable outcome |
 |---|---|---|---|
 | [v0.1.0](https://github.com/AlexMaster23/surveycraft/releases/tag/v0.1.0) | Phase 1 preview | Released | Import manual/CSV points with an explicit coordinate convention and insert native point/label entities in one undo step. |
-| v0.2.0 | Phase 1 | Next | Persist stable survey-point identities and CAD entity links across save/reopen. |
-| v0.3.0 | Phase 1 | Planned | Manage, edit, renumber, delete, select, locate and export existing survey points. |
+| [v0.2.0](https://github.com/AlexMaster23/surveycraft/releases/tag/v0.2.0) | Phase 1 | Released | Persist stable survey-point identities and CAD entity links across save/reopen. |
+| v0.3.0 | Phase 1 | Next | Manage, edit, renumber, delete, select, locate and export existing survey points. |
 | v0.4.0 | Phase 1 | Planned | Apply open code-book rules to layers, labels, feature lines and original symbols. |
 | v0.5.0 | Phase 1 beta | Planned | Diagnose point quality and provide the first practical COGO tool set. |
 | v0.6.0 | Phase 2 | Planned | Discover and validate parcels; create linked area/perimeter labels and tables. |
@@ -39,7 +39,7 @@ The product phases and clean-room engineering constraints remain defined in
 - one transaction and one Undo step;
 - standalone package, documentation and synthetic regression tests.
 
-### v0.2.0 — persistent point model (next)
+### v0.2.0 — persistent point model (released)
 
 - versioned `SurveyProject` metadata with explicit migrations;
 - stable UUID for every survey point;

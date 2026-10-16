@@ -42,11 +42,12 @@ jurisdiction-specific.
 
 - **Release train:** [ROADMAP.md](../ROADMAP.md) maps these modules to versioned GitHub milestones
   from the released v0.1.0 point-import preview through v1.0.0 and the post-1.0 phases.
-- **Implemented locally:** deterministic point CSV/project parsing, CLI validation, native manual
-  and CSV coordinate table, required/numeric/duplicate validation, CAD point and label insertion,
-  fixed output layers, transaction rollback and one-step undo.
-- **Next:** persistent point identity/metadata, style controls, editing existing drawing points,
-  full Point Manager and code-book-driven symbols/feature lines.
+- **Implemented locally:** deterministic point CSV/project parsing, schema-v1-to-v2 migration,
+  native manual and CSV coordinate table, required/numeric/duplicate validation, persistent UUID
+  and CAD entity links, stored point/label styles, link reconciliation, transaction rollback and
+  one-step undo.
+- **Next:** interactive style controls, editing existing drawing points, the full Point Manager and
+  code-book-driven symbols/feature lines.
 - **Host dependency:** installation currently requires the unreleased generic schema 2 capability
   from CADCraft PR #1384; SurveyCraft itself remains a separate repository and package.
 

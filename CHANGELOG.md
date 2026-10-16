@@ -6,7 +6,16 @@ CADCraft host requirements change.
 
 ## Unreleased
 
-- Next target: v0.2.0 persistent point identities, metadata and CAD entity links.
+- Next target: v0.3.0 Point Manager and round-trip editing.
+
+## 0.2.0 — 2026-10-16
+
+- Added project JSON schema v2 with explicit v1 migration and persisted point/label styles.
+- Added stable drawing-project and point UUIDs with exact CAD point/label entity links.
+- Added namespaced drawing and entity metadata through the generic CADCraft extension host.
+- Added save/reopen reconciliation for missing, externally edited and orphaned entities.
+- Added the `surveycraft.points.check-links` command, `SCCHECKPOINTS` alias and Tool Sets button.
+- Added duplicate-number protection across multiple imports into the same drawing.
 
 ## 0.1.0 — 2026-10-16
 

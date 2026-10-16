@@ -1,5 +1,8 @@
 # SurveyCraft project JSON v1
 
+> Legacy format. SurveyCraft v0.2.0 reads this schema and migrates it in memory to
+> [project JSON v2](project-v2.md). New files are written as v2.
+
 The Phase 0 project file is UTF-8 JSON. The canonical CLI output is pretty-printed with two-space
 indentation and a final newline. Property order in external files is not significant.
 

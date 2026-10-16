@@ -7,7 +7,7 @@ use std::error::Error;
 use std::fmt::{Display, Formatter};
 use surveycraft_core::{
     CoreError, Crs, LinearUnit, NumericPolicy, QualityFlag, SourceRef, SurveyPoint, SurveyProject,
-    deterministic_point_id,
+    deterministic_point_id, migrate_project,
 };
 use surveycraft_geometry::{CoordinateError, Point3};
 use uuid::Uuid;
@@ -248,8 +248,7 @@ pub fn read_project_json(input: &[u8]) -> Result<SurveyProject, IoError> {
         });
     }
     let project: SurveyProject = serde_json::from_slice(input)?;
-    project.validate()?;
-    Ok(project)
+    Ok(migrate_project(project)?)
 }
 
 pub fn write_project_json(project: &SurveyProject) -> Result<Vec<u8>, IoError> {
@@ -417,7 +416,7 @@ impl Diagnostic {
 
 #[cfg(test)]
 mod tests {
-    use super::{CsvImportOptions, import_point_csv};
+    use super::{CsvImportOptions, import_point_csv, read_project_json};
     use std::error::Error;
     use surveycraft_core::{Crs, LinearUnit, NumericPolicy, QualityFlag};
     use uuid::Uuid;
@@ -457,6 +456,33 @@ mod tests {
                 .quality_flags
                 .contains(&QualityFlag::DuplicateNumber)
         );
+        Ok(())
+    }
+
+    #[test]
+    fn reads_and_migrates_schema_one_projects() -> Result<(), Box<dyn Error>> {
+        let legacy = br#"{
+            "schemaVersion": 1,
+            "id": "00000000-0000-0000-0000-000000000000",
+            "name": "Legacy",
+            "crs": {"authority": null, "code": null, "name": "Local engineering grid"},
+            "linearUnit": "metre",
+            "numericPolicy": {
+                "coordinateTolerance": 1e-8,
+                "distanceTolerance": 1e-6,
+                "areaTolerance": 1e-6,
+                "displayDecimals": 3
+            },
+            "points": []
+        }"#;
+
+        let project = read_project_json(legacy)?;
+
+        assert_eq!(
+            project.schema_version,
+            surveycraft_core::PROJECT_SCHEMA_VERSION
+        );
+        assert_eq!(project.styles.labels.number_layer, "SC-POINT-NUMBERS");
         Ok(())
     }
 }
