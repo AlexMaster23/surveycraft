@@ -2,6 +2,7 @@
 members = [
     "apps/surveycraft-cli",
     "crates/cadcraft",
+    "crates/coding",
     "crates/core",
     "crates/geometry",
     "crates/io",
@@ -21,8 +22,10 @@ authors = ["AlexMaster23"]
 
 [workspace.dependencies]
 csv = "1.4"
+regex = "1.12"
 serde = { version = "1.0", features = ["derive"] }
 serde_json = "1.0"
+toml = "0.9"
 uuid = { version = "1.18", features = ["serde", "v5"] }
 wit-bindgen = "0.63"
 wit-component = "0.262"

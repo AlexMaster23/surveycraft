@@ -50,10 +50,11 @@ or a release date is implied.
 
 ## Conditions for continuing
 
-v0.4 feature development is paused. The next work is responding to foundation review and agreeing
-on a supported runtime, drawing API and UI extension approach. Feature development can resume once
-maintainer feedback establishes a viable upstream direction. Installation on stock CADCraft will
-only be advertised after all capabilities required by the relevant SurveyCraft version ship in an
+CAD-independent v0.4 work—code-book validation, matching, feature planning and synthetic
+tests—can continue without changing CADCraft. Native feature-line/symbol insertion, live preview
+and editor UI remain gated while the project responds to foundation review and agrees on a
+supported runtime, drawing API and UI extension approach. Installation on stock CADCraft will only
+be advertised after all capabilities required by the relevant SurveyCraft version ship in an
 official release and an installation/save/reopen/undo test passes against that release.
 
 At that point, update the manifest's minimum CADCraft version, compatibility documentation and

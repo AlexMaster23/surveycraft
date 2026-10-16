@@ -1,0 +1,96 @@
+{
+  "schemaVersion": 2,
+  "id": "22222222-2222-4222-8222-222222222222",
+  "name": "Synthetic coded field job",
+  "crs": {
+    "authority": null,
+    "code": null,
+    "name": "Local engineering grid"
+  },
+  "linearUnit": "metre",
+  "numericPolicy": {
+    "coordinateTolerance": 1e-8,
+    "distanceTolerance": 1e-6,
+    "areaTolerance": 1e-6,
+    "displayDecimals": 3
+  },
+  "styles": {
+    "point": {
+      "layer": "SC-POINTS"
+    },
+    "labels": {
+      "numberLayer": "SC-POINT-NUMBERS",
+      "elevationLayer": "SC-POINT-ELEVATIONS",
+      "codeLayer": "SC-POINT-CODES",
+      "height": 0.25,
+      "offsetX": 0.35,
+      "offsetY": 0.35,
+      "elevationDecimals": 3
+    }
+  },
+  "points": [
+    {
+      "id": "00000000-0000-4000-8000-000000000004",
+      "number": "4",
+      "position": { "x": 0.0, "y": 10.0, "z": 0.0 },
+      "code": "EDG-ARC_END-CLOSE",
+      "source": { "source": "synthetic", "row": 5 }
+    },
+    {
+      "id": "00000000-0000-4000-8000-000000000002",
+      "number": "2",
+      "position": { "x": 10.0, "y": 0.0, "z": 0.0 },
+      "code": "EDG-ARC_START",
+      "source": { "source": "synthetic", "row": 3 }
+    },
+    {
+      "id": "00000000-0000-4000-8000-000000000003",
+      "number": "3",
+      "position": { "x": 10.0, "y": 10.0, "z": 0.0 },
+      "code": "EDG",
+      "source": { "source": "synthetic", "row": 4 }
+    },
+    {
+      "id": "00000000-0000-4000-8000-000000000001",
+      "number": "1",
+      "position": { "x": 0.0, "y": 0.0, "z": 0.0 },
+      "code": "EDG-START",
+      "source": { "source": "synthetic", "row": 2 }
+    },
+    {
+      "id": "00000000-0000-4000-8000-000000000010",
+      "number": "10",
+      "position": { "x": 20.0, "y": 0.0, "z": 0.0 },
+      "code": "EDG-ON_CIRCLE",
+      "source": { "source": "synthetic", "row": 6 }
+    },
+    {
+      "id": "00000000-0000-4000-8000-000000000011",
+      "number": "11",
+      "position": { "x": 25.0, "y": 5.0, "z": 0.0 },
+      "code": "EDG-ON_CIRCLE",
+      "source": { "source": "synthetic", "row": 7 }
+    },
+    {
+      "id": "00000000-0000-4000-8000-000000000012",
+      "number": "12",
+      "position": { "x": 30.0, "y": 0.0, "z": 0.0 },
+      "code": "EDG-ON_CIRCLE",
+      "source": { "source": "synthetic", "row": 8 }
+    },
+    {
+      "id": "00000000-0000-4000-8000-000000000020",
+      "number": "20",
+      "position": { "x": 5.0, "y": 5.0, "z": 0.0 },
+      "code": "TREE",
+      "source": { "source": "synthetic", "row": 9 }
+    },
+    {
+      "id": "00000000-0000-4000-8000-000000000021",
+      "number": "21",
+      "position": { "x": 6.0, "y": 5.0, "z": 0.0 },
+      "code": "PIN-17",
+      "source": { "source": "synthetic", "row": 10 }
+    }
+  ]
+}

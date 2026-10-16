@@ -1,6 +1,7 @@
 # TopoLT workflow coverage ledger
 
-Status: **command-level baseline established; option-level and runtime parity audit incomplete**
+Status: **command-level baseline established; v0.4 coding slice specified; remaining option-level
+and runtime parity audit incomplete**
 
 This ledger accounts for the exposed TopoLT 17.2 action surface identified in the existing static
 analysis: 109 menu commands, 30 additional integration entry points, and one Load action. Its 140
@@ -20,6 +21,8 @@ and must not be copied into SurveyCraft.
 - The source report found 648 AutoLISP functions and 52 native bridge primitives. Private helpers
   are implementation detail; this ledger tracks exposed workflows and will add any newly observed
   user-visible behavior discovered during option/runtime auditing.
+- The ten-command v0.4 evidence, option contract, original synthetic results and retained unknowns
+  are expanded in [CODING_FEATURES.md](CODING_FEATURES.md).
 
 ## Status language
 
@@ -61,8 +64,8 @@ and must not be copied into SurveyCraft.
 |---|---|---|---|---|---|---|---|---|
 | TLT-001 | `(load "topolt.lsp")` | Loads TopoLT, selects the host-specific native module, initializes resources, and defines the commands below. | S1 | CADCraft | Upstream host | H1 | Planned | Synthetic parity case TBD |
 | TLT-002 | `TOPOCFG` | Opens program configuration. Settings cover drawing scale/format, points, layers, areas, images, 3D model/contours, plans and exported data; drawing-resident settings can trigger rescaling/redrawing. | S1 | SurveyCraft | v1.0 | H2 | Partial | SC tests exist; parity case TBD |
-| TLT-003 | `EDITCOD` | Opens the allocated `.cod` file in the companion editor. Codes map survey records to descriptions and graphical behavior. | S1 | SurveyCraft | v0.4 | H2+H6 | Planned | Synthetic parity case TBD |
-| TLT-004 | `EDITLAY` | Opens the allocated `.lay` file in the companion editor. | S1 | SurveyCraft | v0.4 | H2+H6 | Planned | Synthetic parity case TBD |
+| TLT-003 | `EDITCOD` | Opens the allocated `.cod` file in the companion editor. Codes map survey records to descriptions and graphical behavior. | S1 | SurveyCraft | v0.4 | H2+H6 | Partial | SC JSON/TOML validation and synthetic tests; editor/CAD parity TBD |
+| TLT-004 | `EDITLAY` | Opens the allocated `.lay` file in the companion editor. | S1 | SurveyCraft | v0.4 | H2+H6 | Partial | SC embedded layer schema and synthetic tests; editor/CAD parity TBD |
 | TLT-005 | `PUR` | Purges unused drawing resources through the host CAD purge workflow. | S1 | CADCraft or SC | Host audit | H8 | Needs native audit | Synthetic parity case TBD |
 
 ## Point-set management
@@ -74,9 +77,9 @@ and must not be copied into SurveyCraft.
 | TLT-008 | `HPCT` | Translates selected points vertically by an elevation change. | S1 | SurveyCraft | v0.5 | H2 | Planned | Synthetic parity case TBD |
 | TLT-009 | `AUTOPCT` | Batch operation that inserts graphical points, rounds/fixes points to decimals, breaks entities at points, and fixes nearby entities to points according to options. | S1 | SurveyCraft | v0.5 | H2 | Planned | Synthetic parity case TBD |
 | TLT-010 | `OPTPCT` | Repositions point text to reduce text-to-text and text-to-entity overlap. | S1 | SurveyCraft | v0.5 | H2 | Planned | Synthetic parity case TBD |
-| TLT-011 | `JOINPCT` | Connects points according to point-code rules. | S1 | SurveyCraft | v0.4 | H2 | Planned | Synthetic parity case TBD |
-| TLT-012 | `SELCOD` | Builds a selection set of points matching selected codes. | S1 | SurveyCraft | v0.4 | H2 | Planned | Synthetic parity case TBD |
-| TLT-013 | `CHCOD` | Changes codes for points on/associated with selected entities. | S1 | SurveyCraft | v0.4 | H2 | Planned | Synthetic parity case TBD |
+| TLT-011 | `JOINPCT` | Connects points according to point-code rules. | S1 | SurveyCraft | v0.4 | H2 | Partial | SC line/arc/circle engine tests; CAD parity TBD |
+| TLT-012 | `SELCOD` | Builds a selection set of points matching selected codes. | S1 | SurveyCraft | v0.4 | H2 | Partial | SC wildcard-selection tests; native selection parity TBD |
+| TLT-013 | `CHCOD` | Changes codes for points on/associated with selected entities. | S1 | SurveyCraft | v0.4 | H2 | Partial | SC first-code replacement tests; entity-endpoint parity TBD |
 | TLT-014 | `XPCT` | Turns off the layers allocated to point components. | S1 | SurveyCraft | v0.5 | H2 | Planned | Synthetic parity case TBD |
 | TLT-015 | `OPCT` | Restores point-layer visibility to its previously recorded state. | S1 | SurveyCraft | v0.5 | H2 | Planned | Synthetic parity case TBD |
 | TLT-016 | `ACTPCT` | Rebuilds/redraws topographic point graphics using the current TopoLT point settings. | S1 | SurveyCraft | v0.3+ | H2 | Partial | SC tests exist; parity case TBD |
@@ -122,11 +125,11 @@ and must not be copied into SurveyCraft.
 
 | ID | Reference action | Required outcome | Evidence | Delivery | Target | Host | Implementation | Verification |
 |---|---|---|---|---|---|---|---|---|
-| TLT-039 | `IB` | Inserts punctiform/block symbols based on point codes and the active `.cod` mapping. | S1 | SurveyCraft | v0.4 | H2 | Planned | Synthetic parity case TBD |
-| TLT-040 | `MSCBL` | Rescales symbols by name or for all mapped codes. | S1 | SurveyCraft | v0.4 | H2 | Planned | Synthetic parity case TBD |
-| TLT-041 | `ROTBL` | Rotates symbols by name or for all mapped codes. | S1 | SurveyCraft | v0.4 | H2 | Planned | Synthetic parity case TBD |
-| TLT-042 | `DELBL` | Deletes symbols by name or for all mapped codes. | S1 | SurveyCraft | v0.4 | H2 | Planned | Synthetic parity case TBD |
-| TLT-043 | `CHL` | Applies/changes line types for linear entities according to point-code rules. | S1 | SurveyCraft | v0.4 | H2 | Planned | Synthetic parity case TBD |
+| TLT-039 | `IB` | Inserts punctiform/block symbols based on point codes and the active `.cod` mapping. | S1 | SurveyCraft | v0.4 | H2 | Partial | SC symbol planning/scale/dedup tests; CAD parity TBD |
+| TLT-040 | `MSCBL` | Rescales symbols by name or for all mapped codes. | S1 | SurveyCraft | v0.4 | H2 | Partial | SC selector/rescale tests; CAD parity TBD |
+| TLT-041 | `ROTBL` | Rotates symbols by name or for all mapped codes. | S1 | SurveyCraft | v0.4 | H2 | Partial | SC degrees/gon bearing tests; CAD parity TBD |
+| TLT-042 | `DELBL` | Deletes symbols by name or for all mapped codes. | S1 | SurveyCraft | v0.4 | H2 | Partial | SC selector/delete tests; CAD parity TBD |
+| TLT-043 | `CHL` | Applies/changes line types for linear entities according to point-code rules. | S1 | SurveyCraft | v0.4 | H2 | Partial | SC majority/priority tests; CAD parity TBD |
 
 ## Areas, parcels, and building surveys
 
@@ -280,7 +283,7 @@ Full workflow coverage cannot be claimed until every row has:
 
 ## Next audit slice
 
-The next pass should expand the v0.4 rows—`EDITCOD`, `EDITLAY`, `JOINPCT`, `SELCOD`,
-`CHCOD`, `IB`, `MSCBL`, `ROTBL`, `DELBL` and `CHL`—into option-level specifications
-and synthetic expected-result cases. That work stays inside SurveyCraft's code-book/feature engine
-and does not require new CADCraft host APIs.
+The next v0.4 pass should connect the documented and synthetic-tested code-book/feature engine to
+native code-book editing, live preview and transactional CAD entities once the accepted CADCraft
+host API can express those operations. Black-box reference comparisons remain required before any
+parity claim.

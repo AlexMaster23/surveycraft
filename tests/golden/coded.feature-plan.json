@@ -1,0 +1,66 @@
+{
+  "paths": [
+    {
+      "id": "b8b5f77c-2abf-5878-8a0e-fe0a08d5194e",
+      "ruleId": "edge",
+      "layer": "features",
+      "style": "continuous",
+      "paperWidthMm": 0.25,
+      "closed": true,
+      "segments": [
+        {
+          "kind": "line",
+          "start": "00000000-0000-4000-8000-000000000001",
+          "end": "00000000-0000-4000-8000-000000000002"
+        },
+        {
+          "kind": "arc",
+          "start": "00000000-0000-4000-8000-000000000002",
+          "through": "00000000-0000-4000-8000-000000000003",
+          "end": "00000000-0000-4000-8000-000000000004"
+        },
+        {
+          "kind": "line",
+          "start": "00000000-0000-4000-8000-000000000004",
+          "end": "00000000-0000-4000-8000-000000000001"
+        }
+      ]
+    }
+  ],
+  "circles": [
+    {
+      "id": "e877e7c2-6971-5782-a95c-b5bb50c4b568",
+      "ruleId": "edge",
+      "layer": "features",
+      "style": "continuous",
+      "paperWidthMm": 0.25,
+      "points": [
+        "00000000-0000-4000-8000-000000000010",
+        "00000000-0000-4000-8000-000000000011",
+        "00000000-0000-4000-8000-000000000012"
+      ]
+    }
+  ],
+  "symbols": [
+    {
+      "id": "c1bb3914-92de-520d-bba2-87092c504738",
+      "pointId": "00000000-0000-4000-8000-000000000020",
+      "ruleId": "tree",
+      "symbol": "surveycraft.tree",
+      "layer": "symbols",
+      "scale": 2.5,
+      "rotationDegrees": 0.0
+    },
+    {
+      "id": "b5bc74c4-eb47-5c66-ae3c-5164d7d0b0f5",
+      "pointId": "00000000-0000-4000-8000-000000000021",
+      "ruleId": "pin",
+      "symbol": "surveycraft.pin",
+      "layer": "symbols",
+      "scale": 2.0,
+      "rotationDegrees": 0.0,
+      "attribute": "17"
+    }
+  ],
+  "diagnostics": []
+}

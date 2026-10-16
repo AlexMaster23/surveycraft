@@ -1,0 +1,78 @@
+schemaVersion = 1
+name = "SurveyCraft synthetic field codes"
+caseSensitive = false
+tokenSeparators = ["-"]
+
+[directives]
+start = ["START", "STA"]
+end = ["END"]
+close = ["CLOSE"]
+arcStart = ["ARC_START"]
+arcEnd = ["ARC_END"]
+onCircle = ["ON_CIRCLE"]
+
+[[layers]]
+id = "features"
+name = "SC-FEATURES"
+color = "#F47A20"
+plot = true
+
+[[layers]]
+id = "symbols"
+name = "SC-SYMBOLS"
+color = "#2CB9D6"
+plot = true
+
+[[rules]]
+id = "edge"
+pattern = "EDG"
+matchMode = "exact"
+description = "Synthetic edge line"
+optimizationRank = 1
+layer = "features"
+
+[rules.graphic]
+kind = "line"
+style = "continuous"
+paperWidthMm = 0.25
+
+[[rules]]
+id = "boundary"
+pattern = "B(ND|DY)"
+matchMode = "regex"
+description = "Synthetic boundary line"
+optimizationRank = 2
+layer = "features"
+
+[rules.graphic]
+kind = "line"
+style = "dashed"
+paperWidthMm = 0.18
+
+[[rules]]
+id = "tree"
+pattern = "TREE"
+matchMode = "prefix"
+description = "Original tree marker"
+optimizationRank = 3
+layer = "symbols"
+
+[rules.graphic]
+kind = "symbol"
+symbol = "surveycraft.tree"
+scale = 1.25
+attributeFromSuffix = false
+
+[[rules]]
+id = "pin"
+pattern = "PIN"
+matchMode = "exact"
+description = "Numbered synthetic marker"
+optimizationRank = 2
+layer = "symbols"
+
+[rules.graphic]
+kind = "symbol"
+symbol = "surveycraft.pin"
+scale = 1.0
+attributeFromSuffix = true

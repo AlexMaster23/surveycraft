@@ -10,6 +10,7 @@ authors.workspace = true
 [dependencies]
 serde.workspace = true
 serde_json.workspace = true
+surveycraft-coding = { path = "../../crates/coding" }
 surveycraft-core = { path = "../../crates/core" }
 surveycraft-io = { path = "../../crates/io" }
 uuid.workspace = true

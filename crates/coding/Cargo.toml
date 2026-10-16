@@ -1,0 +1,18 @@
+[package]
+name = "surveycraft-coding"
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+repository.workspace = true
+authors.workspace = true
+
+[dependencies]
+regex.workspace = true
+serde.workspace = true
+surveycraft-core = { path = "../core" }
+surveycraft-geometry = { path = "../geometry" }
+uuid.workspace = true
+
+[lints]
+workspace = true

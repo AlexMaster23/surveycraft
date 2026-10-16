@@ -6,6 +6,10 @@ use std::cmp::Ordering;
 use std::collections::{BTreeMap, BTreeSet};
 use std::error::Error;
 use std::fmt::{Display, Formatter};
+use std::str::Utf8Error;
+use surveycraft_coding::{
+    CodeBook, CodingError, CompiledCodeBook, FeaturePlan, MAX_CODE_BOOK_BYTES,
+};
 use surveycraft_core::{
     CoreError, Crs, LinearUnit, NumericPolicy, QualityFlag, SourceRef, SurveyPoint, SurveyProject,
     deterministic_point_id, migrate_project,
@@ -25,6 +29,9 @@ pub enum IoError {
     DuplicateHeader(String),
     Csv(csv::Error),
     Json(serde_json::Error),
+    Toml(toml::de::Error),
+    Utf8(Utf8Error),
+    Coding(CodingError),
     Core(CoreError),
     UnknownPoint(Uuid),
 }
@@ -46,7 +53,10 @@ impl Display for IoError {
                 write!(formatter, "CSV header '{header}' appears more than once")
             }
             Self::Csv(error) => write!(formatter, "CSV error: {error}"),
-            Self::Json(error) => write!(formatter, "project JSON error: {error}"),
+            Self::Json(error) => write!(formatter, "JSON error: {error}"),
+            Self::Toml(error) => write!(formatter, "TOML error: {error}"),
+            Self::Utf8(error) => write!(formatter, "input is not valid UTF-8: {error}"),
+            Self::Coding(error) => write!(formatter, "code-book validation error: {error}"),
             Self::Core(error) => write!(formatter, "project validation error: {error}"),
             Self::UnknownPoint(id) => {
                 write!(formatter, "selected point id {id} is not in the project")
@@ -60,6 +70,9 @@ impl Error for IoError {
         match self {
             Self::Csv(error) => Some(error),
             Self::Json(error) => Some(error),
+            Self::Toml(error) => Some(error),
+            Self::Utf8(error) => Some(error),
+            Self::Coding(error) => Some(error),
             Self::Core(error) => Some(error),
             _ => None,
         }
@@ -75,6 +88,24 @@ impl From<csv::Error> for IoError {
 impl From<serde_json::Error> for IoError {
     fn from(error: serde_json::Error) -> Self {
         Self::Json(error)
+    }
+}
+
+impl From<toml::de::Error> for IoError {
+    fn from(error: toml::de::Error) -> Self {
+        Self::Toml(error)
+    }
+}
+
+impl From<Utf8Error> for IoError {
+    fn from(error: Utf8Error) -> Self {
+        Self::Utf8(error)
+    }
+}
+
+impl From<CodingError> for IoError {
+    fn from(error: CodingError) -> Self {
+        Self::Coding(error)
     }
 }
 
@@ -128,6 +159,12 @@ pub struct ImportReport {
     pub project: SurveyProject,
     pub diagnostics: Vec<Diagnostic>,
     pub summary: ImportSummary,
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum CodeBookFormat {
+    Json,
+    Toml,
 }
 
 /// Imports point CSV v1 from an in-memory byte slice suitable for native and WASM callers.
@@ -265,6 +302,36 @@ pub fn write_project_json(project: &SurveyProject) -> Result<Vec<u8>, IoError> {
 
 pub fn write_report_json(report: &ImportReport) -> Result<Vec<u8>, IoError> {
     let mut output = serde_json::to_vec_pretty(report)?;
+    output.push(b'\n');
+    Ok(output)
+}
+
+pub fn read_code_book(input: &[u8], format: CodeBookFormat) -> Result<CodeBook, IoError> {
+    if input.len() > MAX_CODE_BOOK_BYTES {
+        return Err(IoError::InputTooLarge {
+            actual: input.len(),
+            maximum: MAX_CODE_BOOK_BYTES,
+        });
+    }
+    let book: CodeBook = match format {
+        CodeBookFormat::Json => serde_json::from_slice(input)?,
+        CodeBookFormat::Toml => toml::from_str(std::str::from_utf8(input)?)?,
+    };
+    CompiledCodeBook::compile(book.clone())?;
+    Ok(book)
+}
+
+pub fn write_code_book_json(book: &CodeBook) -> Result<Vec<u8>, IoError> {
+    CompiledCodeBook::compile(book.clone())?;
+    write_pretty_json(book)
+}
+
+pub fn write_feature_plan_json(plan: &FeaturePlan) -> Result<Vec<u8>, IoError> {
+    write_pretty_json(plan)
+}
+
+fn write_pretty_json<T: Serialize>(value: &T) -> Result<Vec<u8>, IoError> {
+    let mut output = serde_json::to_vec_pretty(value)?;
     output.push(b'\n');
     Ok(output)
 }

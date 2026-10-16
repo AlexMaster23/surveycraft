@@ -9,7 +9,8 @@ from its own repository as an installable extension package.
 
 **Developer preview: current SurveyCraft releases require a custom CADCraft build. They do not
 work with official CADCraft v0.7.0.** The required extension host is proposed upstream and has not
-been accepted or released. v0.4 feature work is paused while that proposal is reviewed. See
+been accepted or released. The CAD-independent v0.4 engine is in development, while its drawing
+adapter remains gated on the host proposal. See
 [host compatibility and the upstream plan](docs/HOST_COMPATIBILITY.md) before installing.
 
 This repository contains the **Phase 0 engineering foundation** and the working Phase 1 point
@@ -90,10 +91,14 @@ With a current Rust toolchain:
 cargo run -p surveycraft-cli -- validate tests/fixtures/points/basic.csv
 cargo run -p surveycraft-cli -- import tests/fixtures/points/basic.csv --output survey.json
 cargo run -p surveycraft-cli -- inspect survey.json
+cargo run -p surveycraft-cli -- codebook validate tests/fixtures/codebooks/synthetic-field.json
+cargo run -p surveycraft-cli -- codebook preview tests/fixtures/codebooks/synthetic-field.toml edg-sta
 ```
 
 Format contracts are documented in [docs/formats/point-csv-v1.md](docs/formats/point-csv-v1.md),
 [docs/formats/project-v2.md](docs/formats/project-v2.md), and
+[docs/formats/code-book-v1.md](docs/formats/code-book-v1.md). The audited coding-command behavior
+and remaining host work are in [docs/CODING_FEATURES.md](docs/CODING_FEATURES.md). See also
 [docs/numeric-policy.md](docs/numeric-policy.md). The host decision is recorded in
 [docs/adr/0001-portable-wasm-host.md](docs/adr/0001-portable-wasm-host.md).
 

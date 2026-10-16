@@ -31,7 +31,7 @@ Before every commit run:
 cargo fmt --all -- --check
 cargo clippy --workspace --all-targets -- -D warnings
 cargo test --workspace
-cargo check --target wasm32-unknown-unknown -p surveycraft-geometry -p surveycraft-core -p surveycraft-io -p surveycraft-cadcraft -p surveycraft-ui-model
+cargo check --target wasm32-unknown-unknown -p surveycraft-geometry -p surveycraft-core -p surveycraft-coding -p surveycraft-io -p surveycraft-cadcraft -p surveycraft-ui-model
 cargo build --release --target wasm32-unknown-unknown -p surveycraft-extension
 cargo run -p xtask
 ```

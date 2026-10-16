@@ -11,8 +11,10 @@ authors.workspace = true
 csv.workspace = true
 serde.workspace = true
 serde_json.workspace = true
+surveycraft-coding = { path = "../coding" }
 surveycraft-core = { path = "../core" }
 surveycraft-geometry = { path = "../geometry" }
+toml.workspace = true
 uuid.workspace = true
 
 [lints]

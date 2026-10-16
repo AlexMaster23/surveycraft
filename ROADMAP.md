@@ -25,10 +25,11 @@ supported stable workflow set, not an automatic declaration of complete TopoLT p
 
 ## Current priority: official CADCraft host support
 
-v0.4 feature development is paused while the extension-host proposal receives upstream review.
-The v0.1–v0.3 prereleases remain available for development with a custom CADCraft build; no official
-CADCraft release currently supports them. See [HOST_COMPATIBILITY.md](docs/HOST_COMPATIBILITY.md)
-for the tested host revision, staged review plan and conditions for resuming feature work.
+CAD-independent v0.4 engine work continues while the extension-host proposal receives upstream
+review. Native drawing insertion, editing and UI work remain gated. The v0.1–v0.3 prereleases are
+available for development with a custom CADCraft build; no official CADCraft release currently
+supports them. See [HOST_COMPATIBILITY.md](docs/HOST_COMPATIBILITY.md) for the tested host revision
+and staged review plan.
 
 ## Release train
 
@@ -37,7 +38,7 @@ for the tested host revision, staged review plan and conditions for resuming fea
 | [v0.1.0](https://github.com/AlexMaster23/surveycraft/releases/tag/v0.1.0) | Phase 1 preview | Released | Import manual/CSV points with an explicit coordinate convention and insert native point/label entities in one undo step. |
 | [v0.2.0](https://github.com/AlexMaster23/surveycraft/releases/tag/v0.2.0) | Phase 1 | Released | Persist stable survey-point identities and CAD entity links across save/reopen. |
 | [v0.3.0](https://github.com/AlexMaster23/surveycraft/releases/tag/v0.3.0) | Phase 1 | Released | Manage, edit, renumber, delete, select, locate, repair and export existing survey points. |
-| v0.4.0 | Phase 1 | Paused — upstream host review | Apply open code-book rules to layers, labels, feature lines and original symbols. |
+| v0.4.0 | Phase 1 | Engine in progress — CAD adapter gated | Apply open code-book rules to layers, labels, feature lines and original symbols. |
 | v0.5.0 | Phase 1 beta | Planned | Diagnose point quality and provide the first practical COGO tool set. |
 | v0.6.0 | Phase 2 | Planned | Discover and validate parcels; create linked area/perimeter labels and tables. |
 | v0.7.0 | Phase 2 | Planned | Divide parcels to exact target areas and export parcel/room reports. |
@@ -93,6 +94,10 @@ Exit: users can round-trip a point job without reimporting or losing identity.
 - an original, attributed symbol-pack interface with no proprietary assets.
 
 Exit: a coded field file generates predictable, editable CAD linework.
+
+Current unreleased progress: the strict JSON/TOML format, matcher, diagnostics, feature/symbol plan,
+CLI and golden tests are implemented. Live CAD preview, editable drawing entities and the original
+attributed symbol pack remain before the v0.4 exit criterion is reached.
 
 ### v0.5.0 — point quality and COGO beta
 
