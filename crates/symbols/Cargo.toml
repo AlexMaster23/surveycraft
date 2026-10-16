@@ -1,0 +1,18 @@
+[package]
+name = "surveycraft-symbols"
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+repository.workspace = true
+authors.workspace = true
+
+[dependencies]
+serde.workspace = true
+surveycraft-coding = { path = "../coding" }
+surveycraft-core = { path = "../core" }
+surveycraft-geometry = { path = "../geometry" }
+uuid.workspace = true
+
+[lints]
+workspace = true

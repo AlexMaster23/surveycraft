@@ -9,6 +9,9 @@ authors.workspace = true
 publish = false
 
 [dependencies]
+serde_json.workspace = true
+surveycraft-coding = { path = "../crates/coding" }
+surveycraft-symbols = { path = "../crates/symbols" }
 wit-component.workspace = true
 zip.workspace = true
 

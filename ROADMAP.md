@@ -96,8 +96,9 @@ Exit: users can round-trip a point job without reimporting or losing identity.
 Exit: a coded field file generates predictable, editable CAD linework.
 
 Current unreleased progress: the strict JSON/TOML format, matcher, diagnostics, feature/symbol plan,
-CLI and golden tests are implemented. Live CAD preview, editable drawing entities and the original
-attributed symbol pack remain before the v0.4 exit criterion is reached.
+CLI, golden tests, editor/preview state model and original attributed six-symbol pack are
+implemented. The native editor/live preview surface and editable drawing entities remain before
+the v0.4 exit criterion is reached.
 
 ### v0.5.0 — point quality and COGO beta
 

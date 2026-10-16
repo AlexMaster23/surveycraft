@@ -17,6 +17,9 @@ cargo run -p xtask
 
 The second command componentizes the core WASM module and writes an installable bundle to
 `target/extension-package/surveycraft.cadcraft-extension`. The manifest is `extension.json`; it
-requires CADCraft's schema 2 WebAssembly host plus declarative table and manager UI support. Adapter
-tests verify commit, rollback, migration, reconciliation and Point Manager behavior without
-modifying a drawing.
+requires CADCraft's schema 2 WebAssembly host plus declarative table and manager UI support. The
+bundle also carries the validated, original `SurveyCraft Basic Symbols` vector pack under
+`assets/symbols/` and the country-neutral starter code book under `assets/codebooks/`; the packager
+checks that every starter rule resolves before writing the archive. A later CAD adapter will turn
+those primitives into native entities. Adapter tests verify commit, rollback, migration,
+reconciliation and Point Manager behavior without modifying a drawing.

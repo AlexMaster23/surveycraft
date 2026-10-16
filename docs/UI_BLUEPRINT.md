@@ -64,6 +64,19 @@ This focused dialog remains the entry workflow. The v0.3 Point Manager uses the 
 identity created here for filtering, editing, repair and round-trip synchronization. Style controls
 remain planned for a later version.
 
+### Code-book editor (state model implemented; native surface pending)
+
+The v0.4 editor uses the same three-region task pattern. The left side contains editable Layers and
+Rules tables; the right side shows sample point codes, matched rules/directives, diagnostics and a
+vector preview of the selected symbol. The footer reports errors/warnings and disables Save while
+the code book references an unknown layer/symbol or fails schema validation.
+
+The toolkit-independent payload already provides bounded layer/rule rows, rule usage counts, up to
+1,000 preview codes, structured diagnostics, installed symbol attribution and the vector
+primitives required for preview. The future CADCraft surface may edit and resubmit the complete
+draft, but only a valid draft can be persisted. Merely opening or previewing a book never mutates
+the drawing.
+
 ### Task dialogs
 
 Import, parcel split, terrain build, contour and volume workflows use a consistent three-region

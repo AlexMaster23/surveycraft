@@ -664,6 +664,9 @@ impl CompiledCodeBook {
                 }
                 let effective_scale =
                     options.plan_scale_denominator / REFERENCE_SYMBOL_SCALE * scale;
+                if !effective_scale.is_finite() || effective_scale <= 0.0 {
+                    return Err(CodingError::InvalidScaleFactor);
+                }
                 symbols.push(SymbolPlan {
                     id: stable_id(project_id, &format!("symbol:{}:{}", point.id, rule.id)),
                     point_id: point.id,
@@ -1050,6 +1053,12 @@ pub fn rescale_symbols(
     factor: f64,
 ) -> Result<usize, CodingError> {
     if !factor.is_finite() || factor <= 0.0 {
+        return Err(CodingError::InvalidScaleFactor);
+    }
+    if symbols.iter().any(|symbol| {
+        let scaled = symbol.scale * factor;
+        symbol_selected(symbol, selector) && (!scaled.is_finite() || scaled <= 0.0)
+    }) {
         return Err(CodingError::InvalidScaleFactor);
     }
     let mut changed = 0usize;
@@ -1638,6 +1647,49 @@ mod tests {
             1
         );
         assert_eq!(plan.symbols.len(), 1);
+        Ok(())
+    }
+
+    #[test]
+    fn rejects_symbol_scale_overflow_without_partial_mutation() -> Result<(), Box<dyn Error>> {
+        let base = book()?;
+        let mut raw_book = base.book().clone();
+        let tree_rule = raw_book
+            .rules
+            .iter_mut()
+            .find(|rule| rule.id == "tree")
+            .ok_or("missing tree rule")?;
+        let GraphicRule::Symbol { scale, .. } = &mut tree_rule.graphic else {
+            return Err("tree rule is not a symbol".into());
+        };
+        *scale = f64::MAX;
+        let book = CompiledCodeBook::compile(raw_book)?;
+        let points = vec![point("1", 0.0, 0.0, "TREE")?];
+        assert!(
+            book.generate_features(
+                Uuid::nil(),
+                &points,
+                GenerateOptions {
+                    plan_scale_denominator: f64::MAX,
+                    ..GenerateOptions::default()
+                },
+            )
+            .is_err()
+        );
+
+        let mut symbols = vec![super::SymbolPlan {
+            id: Uuid::nil(),
+            point_id: Uuid::nil(),
+            rule_id: "tree".to_owned(),
+            symbol: "surveycraft.tree".to_owned(),
+            layer: None,
+            scale: f64::MAX,
+            rotation_degrees: 0.0,
+            attribute: None,
+        }];
+        let before = symbols.clone();
+        assert!(rescale_symbols(&mut symbols, &SymbolSelector::All, 2.0).is_err());
+        assert_eq!(symbols, before);
         Ok(())
     }
 

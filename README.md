@@ -93,12 +93,14 @@ cargo run -p surveycraft-cli -- import tests/fixtures/points/basic.csv --output 
 cargo run -p surveycraft-cli -- inspect survey.json
 cargo run -p surveycraft-cli -- codebook validate tests/fixtures/codebooks/synthetic-field.json
 cargo run -p surveycraft-cli -- codebook preview tests/fixtures/codebooks/synthetic-field.toml edg-sta
+cargo run -p surveycraft-cli -- symbolpack check-codebook tests/fixtures/codebooks/synthetic-field.json assets/symbols/surveycraft-basic.symbol-pack.json
 ```
 
 Format contracts are documented in [docs/formats/point-csv-v1.md](docs/formats/point-csv-v1.md),
 [docs/formats/project-v2.md](docs/formats/project-v2.md), and
 [docs/formats/code-book-v1.md](docs/formats/code-book-v1.md). The audited coding-command behavior
-and remaining host work are in [docs/CODING_FEATURES.md](docs/CODING_FEATURES.md). See also
+and remaining host work are in [docs/CODING_FEATURES.md](docs/CODING_FEATURES.md). The original
+vector library contract is [docs/formats/symbol-pack-v1.md](docs/formats/symbol-pack-v1.md). See also
 [docs/numeric-policy.md](docs/numeric-policy.md). The host decision is recorded in
 [docs/adr/0001-portable-wasm-host.md](docs/adr/0001-portable-wasm-host.md).
 

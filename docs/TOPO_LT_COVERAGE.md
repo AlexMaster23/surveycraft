@@ -125,7 +125,7 @@ and must not be copied into SurveyCraft.
 
 | ID | Reference action | Required outcome | Evidence | Delivery | Target | Host | Implementation | Verification |
 |---|---|---|---|---|---|---|---|---|
-| TLT-039 | `IB` | Inserts punctiform/block symbols based on point codes and the active `.cod` mapping. | S1 | SurveyCraft | v0.4 | H2 | Partial | SC symbol planning/scale/dedup tests; CAD parity TBD |
+| TLT-039 | `IB` | Inserts punctiform/block symbols based on point codes and the active `.cod` mapping. | S1 | SurveyCraft | v0.4 | H2 | Partial | SC symbol planning, pack, unit placement and dedup tests; CAD parity TBD |
 | TLT-040 | `MSCBL` | Rescales symbols by name or for all mapped codes. | S1 | SurveyCraft | v0.4 | H2 | Partial | SC selector/rescale tests; CAD parity TBD |
 | TLT-041 | `ROTBL` | Rotates symbols by name or for all mapped codes. | S1 | SurveyCraft | v0.4 | H2 | Partial | SC degrees/gon bearing tests; CAD parity TBD |
 | TLT-042 | `DELBL` | Deletes symbols by name or for all mapped codes. | S1 | SurveyCraft | v0.4 | H2 | Partial | SC selector/delete tests; CAD parity TBD |

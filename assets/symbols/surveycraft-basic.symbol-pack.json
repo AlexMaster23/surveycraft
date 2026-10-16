@@ -1,0 +1,187 @@
+{
+  "schemaVersion": 1,
+  "id": "io.github.alexmaster23.surveycraft.basic",
+  "name": "SurveyCraft Basic Symbols",
+  "version": "1.0.0",
+  "license": {
+    "spdx": "MIT OR Apache-2.0",
+    "notice": "Original vector symbols designed for SurveyCraft. No third-party CAD symbol library was used."
+  },
+  "authors": ["SurveyCraft contributors"],
+  "homepage": "https://github.com/AlexMaster23/surveycraft",
+  "symbols": [
+    {
+      "id": "surveycraft.tree",
+      "name": "Tree",
+      "anchor": { "x": 0.0, "y": 0.0 },
+      "primitives": [
+        {
+          "kind": "circle",
+          "center": { "x": 0.0, "y": 0.0 },
+          "radius": 2.4,
+          "strokeWidthMm": 0.25,
+          "filled": false
+        },
+        {
+          "kind": "circle",
+          "center": { "x": 0.0, "y": 0.0 },
+          "radius": 0.45,
+          "strokeWidthMm": 0.25,
+          "filled": true
+        },
+        {
+          "kind": "line",
+          "from": { "x": -1.7, "y": 0.0 },
+          "to": { "x": -0.65, "y": 0.0 },
+          "strokeWidthMm": 0.18
+        },
+        {
+          "kind": "line",
+          "from": { "x": 0.65, "y": 0.0 },
+          "to": { "x": 1.7, "y": 0.0 },
+          "strokeWidthMm": 0.18
+        },
+        {
+          "kind": "line",
+          "from": { "x": 0.0, "y": -1.7 },
+          "to": { "x": 0.0, "y": -0.65 },
+          "strokeWidthMm": 0.18
+        },
+        {
+          "kind": "line",
+          "from": { "x": 0.0, "y": 0.65 },
+          "to": { "x": 0.0, "y": 1.7 },
+          "strokeWidthMm": 0.18
+        }
+      ]
+    },
+    {
+      "id": "surveycraft.pin",
+      "name": "Survey pin",
+      "anchor": { "x": 0.0, "y": 0.0 },
+      "primitives": [
+        {
+          "kind": "circle",
+          "center": { "x": 0.0, "y": 0.0 },
+          "radius": 0.7,
+          "strokeWidthMm": 0.25,
+          "filled": false
+        },
+        {
+          "kind": "line",
+          "from": { "x": -1.6, "y": 0.0 },
+          "to": { "x": 1.6, "y": 0.0 },
+          "strokeWidthMm": 0.18
+        },
+        {
+          "kind": "line",
+          "from": { "x": 0.0, "y": -1.6 },
+          "to": { "x": 0.0, "y": 1.6 },
+          "strokeWidthMm": 0.18
+        }
+      ]
+    },
+    {
+      "id": "surveycraft.station",
+      "name": "Survey station",
+      "anchor": { "x": 0.0, "y": 0.0 },
+      "primitives": [
+        {
+          "kind": "polyline",
+          "points": [
+            { "x": 0.0, "y": 2.0 },
+            { "x": -1.75, "y": -1.0 },
+            { "x": 1.75, "y": -1.0 }
+          ],
+          "closed": true,
+          "strokeWidthMm": 0.25,
+          "filled": false
+        },
+        {
+          "kind": "circle",
+          "center": { "x": 0.0, "y": 0.0 },
+          "radius": 0.35,
+          "strokeWidthMm": 0.18,
+          "filled": true
+        }
+      ]
+    },
+    {
+      "id": "surveycraft.utility-pole",
+      "name": "Utility pole",
+      "anchor": { "x": 0.0, "y": 0.0 },
+      "primitives": [
+        {
+          "kind": "circle",
+          "center": { "x": 0.0, "y": 0.0 },
+          "radius": 1.35,
+          "strokeWidthMm": 0.25,
+          "filled": false
+        },
+        {
+          "kind": "line",
+          "from": { "x": -0.95, "y": -0.95 },
+          "to": { "x": 0.95, "y": 0.95 },
+          "strokeWidthMm": 0.18
+        },
+        {
+          "kind": "line",
+          "from": { "x": -0.95, "y": 0.95 },
+          "to": { "x": 0.95, "y": -0.95 },
+          "strokeWidthMm": 0.18
+        }
+      ]
+    },
+    {
+      "id": "surveycraft.manhole",
+      "name": "Manhole",
+      "anchor": { "x": 0.0, "y": 0.0 },
+      "primitives": [
+        {
+          "kind": "circle",
+          "center": { "x": 0.0, "y": 0.0 },
+          "radius": 1.7,
+          "strokeWidthMm": 0.25,
+          "filled": false
+        },
+        {
+          "kind": "circle",
+          "center": { "x": 0.0, "y": 0.0 },
+          "radius": 1.05,
+          "strokeWidthMm": 0.18,
+          "filled": false
+        },
+        {
+          "kind": "line",
+          "from": { "x": -1.0, "y": 0.0 },
+          "to": { "x": 1.0, "y": 0.0 },
+          "strokeWidthMm": 0.18
+        }
+      ]
+    },
+    {
+      "id": "surveycraft.benchmark",
+      "name": "Benchmark",
+      "anchor": { "x": 0.0, "y": 0.0 },
+      "primitives": [
+        {
+          "kind": "polyline",
+          "points": [
+            { "x": -1.8, "y": -0.9 },
+            { "x": 0.0, "y": 1.8 },
+            { "x": 1.8, "y": -0.9 }
+          ],
+          "closed": true,
+          "strokeWidthMm": 0.25,
+          "filled": false
+        },
+        {
+          "kind": "line",
+          "from": { "x": -1.1, "y": 0.0 },
+          "to": { "x": 1.1, "y": 0.0 },
+          "strokeWidthMm": 0.18
+        }
+      ]
+    }
+  ]
+}

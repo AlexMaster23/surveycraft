@@ -1,0 +1,146 @@
+{
+  "schemaVersion": 1,
+  "name": "SurveyCraft basic starter",
+  "caseSensitive": false,
+  "tokenSeparators": ["-"],
+  "directives": {
+    "start": ["START", "STA"],
+    "end": ["END"],
+    "close": ["CLOSE"],
+    "arcStart": ["ARC_START"],
+    "arcEnd": ["ARC_END"],
+    "onCircle": ["ON_CIRCLE"]
+  },
+  "layers": [
+    {
+      "id": "features",
+      "name": "SC-FEATURES",
+      "color": "#F47A20",
+      "plot": true
+    },
+    {
+      "id": "boundaries",
+      "name": "SC-BOUNDARIES",
+      "color": "#F4EEE4",
+      "plot": true
+    },
+    {
+      "id": "symbols",
+      "name": "SC-SYMBOLS",
+      "color": "#27C2D6",
+      "plot": true
+    }
+  ],
+  "rules": [
+    {
+      "id": "edge",
+      "pattern": "EDG",
+      "matchMode": "exact",
+      "description": "General measured edge",
+      "optimizationRank": 1,
+      "layer": "features",
+      "graphic": {
+        "kind": "line",
+        "style": "continuous",
+        "paperWidthMm": 0.25
+      }
+    },
+    {
+      "id": "boundary",
+      "pattern": "BND",
+      "matchMode": "exact",
+      "description": "General measured boundary",
+      "optimizationRank": 2,
+      "layer": "boundaries",
+      "graphic": {
+        "kind": "line",
+        "style": "dashed",
+        "paperWidthMm": 0.25
+      }
+    },
+    {
+      "id": "tree",
+      "pattern": "TREE",
+      "matchMode": "exact",
+      "description": "Tree",
+      "optimizationRank": 3,
+      "layer": "symbols",
+      "graphic": {
+        "kind": "symbol",
+        "symbol": "surveycraft.tree",
+        "scale": 1.0,
+        "attributeFromSuffix": false
+      }
+    },
+    {
+      "id": "pin",
+      "pattern": "PIN",
+      "matchMode": "exact",
+      "description": "Survey pin",
+      "optimizationRank": 2,
+      "layer": "symbols",
+      "graphic": {
+        "kind": "symbol",
+        "symbol": "surveycraft.pin",
+        "scale": 1.0,
+        "attributeFromSuffix": true
+      }
+    },
+    {
+      "id": "station",
+      "pattern": "STN",
+      "matchMode": "exact",
+      "description": "Survey station",
+      "optimizationRank": 1,
+      "layer": "symbols",
+      "graphic": {
+        "kind": "symbol",
+        "symbol": "surveycraft.station",
+        "scale": 1.0,
+        "attributeFromSuffix": true
+      }
+    },
+    {
+      "id": "utility-pole",
+      "pattern": "POLE",
+      "matchMode": "exact",
+      "description": "Utility pole",
+      "optimizationRank": 4,
+      "layer": "symbols",
+      "graphic": {
+        "kind": "symbol",
+        "symbol": "surveycraft.utility-pole",
+        "scale": 1.0,
+        "attributeFromSuffix": false
+      }
+    },
+    {
+      "id": "manhole",
+      "pattern": "MH",
+      "matchMode": "exact",
+      "description": "Manhole",
+      "optimizationRank": 4,
+      "layer": "symbols",
+      "graphic": {
+        "kind": "symbol",
+        "symbol": "surveycraft.manhole",
+        "scale": 1.0,
+        "attributeFromSuffix": false
+      }
+    },
+    {
+      "id": "benchmark",
+      "pattern": "BM",
+      "matchMode": "exact",
+      "description": "Benchmark",
+      "optimizationRank": 1,
+      "layer": "symbols",
+      "graphic": {
+        "kind": "symbol",
+        "symbol": "surveycraft.benchmark",
+        "scale": 1.0,
+        "attributeFromSuffix": true
+      }
+    }
+  ]
+}

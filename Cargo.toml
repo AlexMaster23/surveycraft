@@ -6,6 +6,7 @@ members = [
     "crates/core",
     "crates/geometry",
     "crates/io",
+    "crates/symbols",
     "crates/ui-model",
     "extension/reference",
     "xtask",

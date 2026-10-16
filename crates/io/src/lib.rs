@@ -15,6 +15,7 @@ use surveycraft_core::{
     deterministic_point_id, migrate_project,
 };
 use surveycraft_geometry::{CoordinateError, Point3};
+use surveycraft_symbols::{MAX_SYMBOL_PACK_BYTES, SymbolError, SymbolPack, validate_pack};
 use uuid::Uuid;
 
 pub const MAX_INPUT_BYTES: usize = 64 * 1024 * 1024;
@@ -32,6 +33,7 @@ pub enum IoError {
     Toml(toml::de::Error),
     Utf8(Utf8Error),
     Coding(CodingError),
+    Symbol(SymbolError),
     Core(CoreError),
     UnknownPoint(Uuid),
 }
@@ -57,6 +59,7 @@ impl Display for IoError {
             Self::Toml(error) => write!(formatter, "TOML error: {error}"),
             Self::Utf8(error) => write!(formatter, "input is not valid UTF-8: {error}"),
             Self::Coding(error) => write!(formatter, "code-book validation error: {error}"),
+            Self::Symbol(error) => write!(formatter, "symbol-pack validation error: {error}"),
             Self::Core(error) => write!(formatter, "project validation error: {error}"),
             Self::UnknownPoint(id) => {
                 write!(formatter, "selected point id {id} is not in the project")
@@ -73,6 +76,7 @@ impl Error for IoError {
             Self::Toml(error) => Some(error),
             Self::Utf8(error) => Some(error),
             Self::Coding(error) => Some(error),
+            Self::Symbol(error) => Some(error),
             Self::Core(error) => Some(error),
             _ => None,
         }
@@ -106,6 +110,12 @@ impl From<Utf8Error> for IoError {
 impl From<CodingError> for IoError {
     fn from(error: CodingError) -> Self {
         Self::Coding(error)
+    }
+}
+
+impl From<SymbolError> for IoError {
+    fn from(error: SymbolError) -> Self {
+        Self::Symbol(error)
     }
 }
 
@@ -328,6 +338,23 @@ pub fn write_code_book_json(book: &CodeBook) -> Result<Vec<u8>, IoError> {
 
 pub fn write_feature_plan_json(plan: &FeaturePlan) -> Result<Vec<u8>, IoError> {
     write_pretty_json(plan)
+}
+
+pub fn read_symbol_pack_json(input: &[u8]) -> Result<SymbolPack, IoError> {
+    if input.len() > MAX_SYMBOL_PACK_BYTES {
+        return Err(IoError::InputTooLarge {
+            actual: input.len(),
+            maximum: MAX_SYMBOL_PACK_BYTES,
+        });
+    }
+    let pack: SymbolPack = serde_json::from_slice(input)?;
+    validate_pack(&pack)?;
+    Ok(pack)
+}
+
+pub fn write_symbol_pack_json(pack: &SymbolPack) -> Result<Vec<u8>, IoError> {
+    validate_pack(pack)?;
+    write_pretty_json(pack)
 }
 
 fn write_pretty_json<T: Serialize>(value: &T) -> Result<Vec<u8>, IoError> {

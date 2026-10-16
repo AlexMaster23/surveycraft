@@ -13,6 +13,12 @@ CADCraft host requirements change.
   and symbol plan insertion, scaling, topographic rotation and deletion.
 - Added strict equivalent JSON/TOML code-book readers, synthetic fixtures, CLI
   `codebook validate`, `preview` and `generate` commands, and the v0.4 behavior contract.
+- Added the validated symbol-pack v1 interface, unit-aware vector placement, SPDX attribution and
+  six original SurveyCraft Basic Symbols bundled with the extension package.
+- Added CLI symbol-pack validation, inspection and code-book resolution checks plus a bounded,
+  host-neutral code-book editor/preview state model with inline symbol vectors and diagnostics.
+- Added a country-neutral starter code book and package-time validation that all bundled code rules
+  resolve against the bundled symbol catalog.
 
 ## 0.3.0 — 2026-10-16
 

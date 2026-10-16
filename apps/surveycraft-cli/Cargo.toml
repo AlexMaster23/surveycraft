@@ -13,6 +13,7 @@ serde_json.workspace = true
 surveycraft-coding = { path = "../../crates/coding" }
 surveycraft-core = { path = "../../crates/core" }
 surveycraft-io = { path = "../../crates/io" }
+surveycraft-symbols = { path = "../../crates/symbols" }
 uuid.workspace = true
 
 [lints]

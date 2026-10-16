@@ -8,6 +8,13 @@ rejected so spelling mistakes cannot silently change a drawing result.
 The readable synthetic examples are
 [`synthetic-field.json`](../../tests/fixtures/codebooks/synthetic-field.json) and
 [`synthetic-field.toml`](../../tests/fixtures/codebooks/synthetic-field.toml).
+Symbol identifiers resolve through the separately attributed
+[symbol-pack v1](symbol-pack-v1.md) catalog.
+
+The extension bundle also contains a country-neutral
+[`SurveyCraft basic starter`](../../assets/codebooks/surveycraft-basic.code-book.json). Its short
+codes are editable examples, not a national standard and not a compatibility copy of another
+product's code database.
 
 ## Root properties
 

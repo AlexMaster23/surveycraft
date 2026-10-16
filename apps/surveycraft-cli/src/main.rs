@@ -8,8 +8,10 @@ use surveycraft_coding::{CompiledCodeBook, GenerateOptions};
 use surveycraft_core::{Crs, LinearUnit, NumericPolicy};
 use surveycraft_io::{
     CodeBookFormat, CsvImportOptions, ImportReport, import_point_csv, read_code_book,
-    read_project_json, write_feature_plan_json, write_project_json, write_report_json,
+    read_project_json, read_symbol_pack_json, write_feature_plan_json, write_project_json,
+    write_report_json,
 };
+use surveycraft_symbols::{SymbolAttribution, SymbolCatalog, SymbolDefinition};
 use uuid::Uuid;
 
 fn main() {
@@ -95,6 +97,41 @@ fn run(arguments: Vec<String>) -> Result<(), CliError> {
                 options.output.display()
             );
         }
+        Command::SymbolPackValidate(paths) => {
+            let catalog = load_symbol_catalog(&paths)?;
+            println!(
+                "Valid symbol catalog ({} pack(s), {} symbol(s))",
+                paths.len(),
+                catalog.symbol_ids().len()
+            );
+        }
+        Command::SymbolPackInspect { path, symbol } => {
+            let catalog = load_symbol_catalog(&[path])?;
+            let definition = catalog
+                .definition(&symbol)
+                .cloned()
+                .ok_or_else(|| surveycraft_symbols::SymbolError::UnknownSymbol(symbol.clone()))?;
+            let attribution = catalog
+                .attribution(&symbol)
+                .ok_or_else(|| surveycraft_symbols::SymbolError::UnknownSymbol(symbol.clone()))?;
+            println!(
+                "{}",
+                serde_json::to_string_pretty(&SymbolDetails {
+                    attribution,
+                    definition,
+                })?
+            );
+        }
+        Command::SymbolPackCheckCodeBook { book, packs } => {
+            let book = load_code_book(&book)?;
+            let catalog = load_symbol_catalog(&packs)?;
+            catalog.validate_code_book(&book)?;
+            println!(
+                "Code book '{}' resolves all symbols across {} pack(s)",
+                book.name,
+                packs.len()
+            );
+        }
         Command::Help => print_help(),
     }
     Ok(())
@@ -106,6 +143,7 @@ enum CliError {
     Io(std::io::Error),
     SurveyIo(surveycraft_io::IoError),
     Coding(surveycraft_coding::CodingError),
+    Symbol(surveycraft_symbols::SymbolError),
     Json(serde_json::Error),
     Utf8(std::str::Utf8Error),
     InvalidUuid(uuid::Error),
@@ -121,6 +159,7 @@ impl Display for CliError {
             Self::Io(error) => write!(formatter, "file operation failed: {error}"),
             Self::SurveyIo(error) => Display::fmt(error, formatter),
             Self::Coding(error) => Display::fmt(error, formatter),
+            Self::Symbol(error) => Display::fmt(error, formatter),
             Self::Json(error) => write!(formatter, "could not produce JSON: {error}"),
             Self::Utf8(error) => write!(formatter, "internal JSON was not UTF-8: {error}"),
             Self::InvalidUuid(error) => write!(formatter, "invalid project UUID: {error}"),
@@ -140,6 +179,7 @@ impl Error for CliError {
             Self::Io(error) => Some(error),
             Self::SurveyIo(error) => Some(error),
             Self::Coding(error) => Some(error),
+            Self::Symbol(error) => Some(error),
             Self::Json(error) => Some(error),
             Self::Utf8(error) => Some(error),
             Self::InvalidUuid(error) => Some(error),
@@ -163,6 +203,12 @@ impl From<surveycraft_io::IoError> for CliError {
 impl From<surveycraft_coding::CodingError> for CliError {
     fn from(error: surveycraft_coding::CodingError) -> Self {
         Self::Coding(error)
+    }
+}
+
+impl From<surveycraft_symbols::SymbolError> for CliError {
+    fn from(error: surveycraft_symbols::SymbolError) -> Self {
+        Self::Symbol(error)
     }
 }
 
@@ -192,6 +238,9 @@ enum Command {
     CodeBookValidate(PathBuf),
     CodeBookPreview { path: PathBuf, code: String },
     CodeBookGenerate(CodeBookGenerateOptions),
+    SymbolPackValidate(Vec<PathBuf>),
+    SymbolPackInspect { path: PathBuf, symbol: String },
+    SymbolPackCheckCodeBook { book: PathBuf, packs: Vec<PathBuf> },
     Help,
 }
 
@@ -241,7 +290,35 @@ fn parse_command(arguments: &[String]) -> Result<Command, CliError> {
             Ok(Command::Inspect(PathBuf::from(&arguments[1])))
         }
         "codebook" => parse_code_book_command(&arguments[1..]),
+        "symbolpack" => parse_symbol_pack_command(&arguments[1..]),
         unknown => Err(CliError::Usage(format!("unknown command '{unknown}'"))),
+    }
+}
+
+fn parse_symbol_pack_command(arguments: &[String]) -> Result<Command, CliError> {
+    let Some(action) = arguments.first().map(String::as_str) else {
+        return Err(CliError::Usage(
+            "symbolpack requires validate, inspect, or check-codebook".to_owned(),
+        ));
+    };
+    match action {
+        "validate" if arguments.len() >= 2 => Ok(Command::SymbolPackValidate(
+            arguments[1..].iter().map(PathBuf::from).collect(),
+        )),
+        "inspect" if arguments.len() == 3 => Ok(Command::SymbolPackInspect {
+            path: PathBuf::from(&arguments[1]),
+            symbol: arguments[2].clone(),
+        }),
+        "check-codebook" if arguments.len() >= 3 => Ok(Command::SymbolPackCheckCodeBook {
+            book: PathBuf::from(&arguments[1]),
+            packs: arguments[2..].iter().map(PathBuf::from).collect(),
+        }),
+        "validate" | "inspect" | "check-codebook" => Err(CliError::Usage(format!(
+            "symbolpack {action} received the wrong number of arguments"
+        ))),
+        unknown => Err(CliError::Usage(format!(
+            "unknown symbolpack command '{unknown}'"
+        ))),
     }
 }
 
@@ -403,6 +480,14 @@ fn load_code_book(path: &Path) -> Result<surveycraft_coding::CodeBook, CliError>
     Ok(read_code_book(&fs::read(path)?, format)?)
 }
 
+fn load_symbol_catalog(paths: &[PathBuf]) -> Result<SymbolCatalog, CliError> {
+    let packs = paths
+        .iter()
+        .map(|path| Ok(read_symbol_pack_json(&fs::read(path)?)?))
+        .collect::<Result<Vec<_>, CliError>>()?;
+    Ok(SymbolCatalog::compile(packs)?)
+}
+
 fn print_utf8(bytes: &[u8]) -> Result<(), CliError> {
     print!("{}", std::str::from_utf8(bytes)?);
     Ok(())
@@ -417,7 +502,10 @@ fn print_help() {
          surveycraft inspect <project.json>\n  \
          surveycraft codebook validate <book.json|book.toml>\n  \
          surveycraft codebook preview <book.json|book.toml> <code>\n  \
-         surveycraft codebook generate <book.json|book.toml> <project.json> --output <plan.json> [--plan-scale SCALE] [--join-unmarked]"
+         surveycraft codebook generate <book.json|book.toml> <project.json> --output <plan.json> [--plan-scale SCALE] [--join-unmarked]\n  \
+         surveycraft symbolpack validate <pack.json> [pack.json...]\n  \
+         surveycraft symbolpack inspect <pack.json> <symbol-id>\n  \
+         surveycraft symbolpack check-codebook <book.json|book.toml> <pack.json> [pack.json...]"
     );
 }
 
@@ -430,6 +518,13 @@ struct ProjectSummary {
     linear_unit: LinearUnit,
     crs_name: String,
     points: usize,
+}
+
+#[derive(Serialize)]
+#[serde(rename_all = "camelCase")]
+struct SymbolDetails {
+    attribution: SymbolAttribution,
+    definition: SymbolDefinition,
 }
 
 #[cfg(test)]
@@ -479,6 +574,24 @@ mod tests {
                 assert_eq!(options.output.to_string_lossy(), "plan.json");
             }
             _ => return Err("expected code-book generation command".into()),
+        }
+        Ok(())
+    }
+
+    #[test]
+    fn parses_symbol_pack_code_book_check() -> Result<(), Box<dyn Error>> {
+        let command = parse_command(&[
+            "symbolpack".to_owned(),
+            "check-codebook".to_owned(),
+            "field.json".to_owned(),
+            "basic.symbol-pack.json".to_owned(),
+        ])?;
+        match command {
+            Command::SymbolPackCheckCodeBook { book, packs } => {
+                assert_eq!(book.to_string_lossy(), "field.json");
+                assert_eq!(packs.len(), 1);
+            }
+            _ => return Err("expected symbol-pack code-book check".into()),
         }
         Ok(())
     }

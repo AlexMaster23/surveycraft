@@ -14,6 +14,7 @@ serde_json.workspace = true
 surveycraft-coding = { path = "../coding" }
 surveycraft-core = { path = "../core" }
 surveycraft-geometry = { path = "../geometry" }
+surveycraft-symbols = { path = "../symbols" }
 toml.workspace = true
 uuid.workspace = true
 

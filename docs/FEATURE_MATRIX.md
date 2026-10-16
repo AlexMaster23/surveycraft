@@ -43,9 +43,9 @@ No module below is currently certified as complete TopoLT parity.
 | Point quality | Detect close/duplicate points, optimize labels, snap geometry to survey points | Non-destructive diagnostics with selectable fixes | P1 | Partial |
 | COGO | Polar/sightshot calculations and coordinate reports | Inverse, traverse, intersections and observation reduction in pure Rust | P0/P1 | Planned |
 | Instrument transfer | Receive/send coordinates and record measurements | Separate opt-in device capability and open instrument profiles | P3 | Planned |
-| Code book | Map field codes to layers, symbols, line types and scales | Open JSON/TOML code book; exact/prefix/regex rules; structured diagnostics | P0 | Partial — engine and CLI implemented; editor/preview pending |
+| Code book | Map field codes to layers, symbols, line types and scales | Open JSON/TOML code book; exact/prefix/regex rules; structured diagnostics | P0 | Partial — engine, CLI and editor/preview model implemented; native surface pending |
 | Feature lines | Join points by code and create coded linework | Stable feature identities referencing point UUIDs | P0 | Partial — deterministic path/arc/circle plans tested; CAD adapter pending |
-| Symbols | Insert topographic blocks based on code | Original open symbol library in a separate attributed pack | P1 | Partial — scale/rotate/delete plans tested; original pack and CAD adapter pending |
+| Symbols | Insert topographic blocks based on code | Original open symbol library in a separate attributed pack | P1 | Partial — pack interface, six original symbols and placement tests implemented; CAD adapter pending |
 | Areas | Area/perimeter labels and calculation tables | Robust planar rings, explicit units/rounding and linked labels | P0 | Planned |
 | Parcel division | Split a parcel by parallel/perpendicular, proportion, point/opening, offset or side translation | Exact target-area solver with preview and residual report | P1 | Planned |
 | Parcel links | Recalculate labels/tables after boundary edits | Typed metadata links and stale-link diagnostics | P0 | Planned |
