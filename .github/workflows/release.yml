@@ -1,0 +1,55 @@
+name: Release
+
+on:
+  push:
+    tags:
+      - "v[0-9]+.[0-9]+.[0-9]+"
+
+permissions:
+  contents: write
+
+jobs:
+  release:
+    if: github.repository == 'AlexMaster23/surveycraft'
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: dtolnay/rust-toolchain@stable
+        with:
+          components: rustfmt, clippy
+          targets: wasm32-unknown-unknown
+      - run: cargo fmt --all -- --check
+      - run: cargo clippy --workspace --all-targets -- -D warnings
+      - run: cargo test --workspace
+      - name: Check portable crates for WebAssembly
+        run: >-
+          cargo check --target wasm32-unknown-unknown
+          -p surveycraft-geometry
+          -p surveycraft-core
+          -p surveycraft-io
+          -p surveycraft-cadcraft
+          -p surveycraft-ui-model
+      - name: Build SurveyCraft WebAssembly extension
+        run: cargo build --release --target wasm32-unknown-unknown -p surveycraft-extension
+      - name: Package SurveyCraft extension
+        run: cargo run -p xtask
+      - name: Write package checksum
+        working-directory: target/extension-package
+        run: sha256sum surveycraft.cadcraft-extension > surveycraft.cadcraft-extension.sha256
+      - name: Create GitHub release
+        env:
+          GH_TOKEN: ${{ github.token }}
+        shell: bash
+        run: |
+          version="${GITHUB_REF_NAME#v}"
+          flags=()
+          if [[ "$GITHUB_REF_NAME" == v0.* ]]; then
+            flags+=(--prerelease)
+          fi
+          gh release create "$GITHUB_REF_NAME" \
+            "target/extension-package/surveycraft.cadcraft-extension#SurveyCraft extension package" \
+            "target/extension-package/surveycraft.cadcraft-extension.sha256#SHA-256 checksum" \
+            --verify-tag \
+            --title "SurveyCraft $version" \
+            --generate-notes \
+            "${flags[@]}"

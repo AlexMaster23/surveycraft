@@ -11,8 +11,10 @@ and not source code bundled into CADCraft's extension-system pull request.
 This repository contains the **Phase 0 engineering foundation** and the first working Phase 1
 point-import workflow. The implementation plan is in
 [BLUEPRINT.md](BLUEPRINT.md), the product parity ledger is in
-[docs/FEATURE_MATRIX.md](docs/FEATURE_MATRIX.md), and the interface specification is in
-[docs/UI_BLUEPRINT.md](docs/UI_BLUEPRINT.md).
+[docs/FEATURE_MATRIX.md](docs/FEATURE_MATRIX.md), the versioned release plan is in
+[ROADMAP.md](ROADMAP.md), and the interface specification is in
+[docs/UI_BLUEPRINT.md](docs/UI_BLUEPRINT.md). Released changes are recorded in
+[CHANGELOG.md](CHANGELOG.md).
 
 The working point command opens a native CADCraft table, accepts manually entered or imported
 coordinates, lets the user choose CAD/GIS or Survey/TopoLT X/Y interpretation, validates the rows,
@@ -81,3 +83,10 @@ Format contracts are documented in [docs/formats/point-csv-v1.md](docs/formats/p
 [docs/formats/project-v1.md](docs/formats/project-v1.md), and
 [docs/numeric-policy.md](docs/numeric-policy.md). The host decision is recorded in
 [docs/adr/0001-portable-wasm-host.md](docs/adr/0001-portable-wasm-host.md).
+
+## Releases
+
+Every completed roadmap version receives a tagged GitHub Release with the installable
+`surveycraft.cadcraft-extension` package and a SHA-256 checksum. Pre-1.0 versions are published as
+prereleases. See the [latest releases](https://github.com/AlexMaster23/surveycraft/releases) and
+the [version exit criteria](ROADMAP.md#version-exit-criteria).

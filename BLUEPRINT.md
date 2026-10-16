@@ -176,6 +176,9 @@ models, so the extension looks native and does not bundle a second GUI toolkit.
 
 ## 6. Delivery roadmap
 
+The phases below describe product scope. [ROADMAP.md](ROADMAP.md) divides them into independently
+installable versions with explicit exit criteria and GitHub milestones.
+
 ### Phase 0 — foundations
 
 - agree on this blueprint and brand;
@@ -266,9 +269,9 @@ Each feature needs four levels of proof:
 Parity comparisons use fresh synthetic inputs and compare numeric/result summaries, never copied
 vendor drawings or assets. Tolerances and unknowns are recorded next to the test.
 
-## 9. Definition of the first public release
+## 9. Definition of the first stable release
 
-SurveyCraft 0.1 is ready when a user on the latest stable CADCraft can:
+SurveyCraft 1.0 is ready when a user on the latest stable CADCraft can:
 
 - install a signed/reproducible `.cadcraft-extension` bundle through Tools > Extensions;
 - import and validate points, apply codes, create feature lines and edit point data;

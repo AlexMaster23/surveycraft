@@ -40,6 +40,8 @@ jurisdiction-specific.
 
 ## Current implementation status
 
+- **Release train:** [ROADMAP.md](../ROADMAP.md) maps these modules to versioned GitHub milestones
+  from the released v0.1.0 point-import preview through v1.0.0 and the post-1.0 phases.
 - **Implemented locally:** deterministic point CSV/project parsing, CLI validation, native manual
   and CSV coordinate table, required/numeric/duplicate validation, CAD point and label insertion,
   fixed output layers, transaction rollback and one-step undo.
