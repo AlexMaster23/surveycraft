@@ -43,9 +43,9 @@ No module below is currently certified as complete TopoLT parity.
 | Point quality | Detect close/duplicate points, optimize labels, snap geometry to survey points | Non-destructive diagnostics with selectable fixes | P1 | Partial |
 | COGO | Polar/sightshot calculations and coordinate reports | Inverse, traverse, intersections and observation reduction in pure Rust | P0/P1 | Planned |
 | Instrument transfer | Receive/send coordinates and record measurements | Separate opt-in device capability and open instrument profiles | P3 | Planned |
-| Code book | Map field codes to layers, symbols, line types and scales | Open JSON/TOML code book; exact/prefix/regex rules; structured diagnostics | P0 | Partial — engine, CLI and editor/preview model implemented; native surface pending |
-| Feature lines | Join points by code and create coded linework | Stable feature identities referencing point UUIDs | P0 | Partial — deterministic path/arc/circle plans tested; CAD adapter pending |
-| Symbols | Insert topographic blocks based on code | Original open symbol library in a separate attributed pack | P1 | Partial — pack interface, six original symbols and placement tests implemented; CAD adapter pending |
+| Code book | Map field codes to layers, symbols, line types and scales | Open JSON/TOML code book; exact/prefix/regex rules; structured diagnostics | P0 | Implemented in v0.4 — native rule manager, unsaved preview, persistence and JSON export on the tested custom host |
+| Feature lines | Join points by code and create coded linework | Stable feature identities referencing point UUIDs | P0 | Implemented in v0.4 — transactional native lines/arcs/circles with source-point provenance; direct linetype/lineweight mapping remains open |
+| Symbols | Insert topographic blocks based on code | Original open symbol library in a separate attributed pack | P1 | Implemented in v0.4 — six original symbols inserted as editable native line/circle primitives; reusable blocks and rendered attributes remain open |
 | Areas | Area/perimeter labels and calculation tables | Robust planar rings, explicit units/rounding and linked labels | P0 | Planned |
 | Parcel division | Split a parcel by parallel/perpendicular, proportion, point/opening, offset or side translation | Exact target-area solver with preview and residual report | P1 | Planned |
 | Parcel links | Recalculate labels/tables after boundary edits | Typed metadata links and stale-link diagnostics | P0 | Planned |
@@ -77,8 +77,8 @@ No module below is currently certified as complete TopoLT parity.
   and CAD entity links, stored point/label styles, link reconciliation, Point Manager filtering,
   selection/location, editing, repair, renumbering, deletion and deterministic CSV export. Every
   mutation rolls back atomically and becomes one Undo step.
-- **Current priority:** finish the CAD-independent v0.4.0 engine while upstream reviews the
-  CADCraft extension host. Native layers, symbols, feature entities and UI remain gated; see
+- **Current priority:** build v0.5.0 point-quality and COGO tools while upstream reviews the
+  CADCraft extension host. The v0.4 native workflow runs only on the tested custom host; see
   [HOST_COMPATIBILITY.md](HOST_COMPATIBILITY.md).
 - **Host dependency:** installation currently requires the unreleased generic schema 2 capability
   from CADCraft PR #1384; SurveyCraft itself remains a separate repository and package.

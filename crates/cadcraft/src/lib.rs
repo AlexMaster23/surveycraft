@@ -11,6 +11,9 @@ use surveycraft_core::{
 use surveycraft_geometry::Point3;
 use uuid::Uuid;
 
+mod coding;
+pub use coding::*;
+
 const DRAWING_PROJECT_SCHEMA_VERSION: u32 = 1;
 const PROJECT_METADATA_KEY: &str = "survey-project";
 const POINT_ID_METADATA_KEY: &str = "point-id";
@@ -39,6 +42,24 @@ pub struct LineRequest {
 
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
+pub struct ArcRequest {
+    pub center: Point3,
+    pub radius: f64,
+    pub start_degrees: f64,
+    pub end_degrees: f64,
+    pub layer: String,
+}
+
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+pub struct CircleRequest {
+    pub center: Point3,
+    pub radius: f64,
+    pub layer: String,
+}
+
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
 pub struct PointRequest {
     pub position: Point3,
     pub layer: String,
@@ -58,6 +79,8 @@ pub struct TextRequest {
 #[serde(rename_all = "kebab-case")]
 pub enum EntityKind {
     Line,
+    Arc,
+    Circle,
     Point,
     Text,
     Other,
@@ -363,6 +386,16 @@ pub trait CadcraftHost {
         &mut self,
         transaction: TransactionId,
         request: &LineRequest,
+    ) -> Result<EntityId, HostError>;
+    fn create_arc(
+        &mut self,
+        transaction: TransactionId,
+        request: &ArcRequest,
+    ) -> Result<EntityId, HostError>;
+    fn create_circle(
+        &mut self,
+        transaction: TransactionId,
+        request: &CircleRequest,
     ) -> Result<EntityId, HostError>;
     fn create_point(
         &mut self,
@@ -1977,6 +2010,37 @@ mod tests {
             }
         }
 
+        fn create_arc(
+            &mut self,
+            _transaction: TransactionId,
+            request: &ArcRequest,
+        ) -> Result<EntityId, HostError> {
+            self.events.push("create-arc");
+            if self.fail_create {
+                Err(HostError::new("synthetic create failure"))
+            } else {
+                Ok(self.allocate(EntityKind::Arc, &request.layer, Some(request.center), None))
+            }
+        }
+
+        fn create_circle(
+            &mut self,
+            _transaction: TransactionId,
+            request: &CircleRequest,
+        ) -> Result<EntityId, HostError> {
+            self.events.push("create-circle");
+            if self.fail_create {
+                Err(HostError::new("synthetic create failure"))
+            } else {
+                Ok(self.allocate(
+                    EntityKind::Circle,
+                    &request.layer,
+                    Some(request.center),
+                    None,
+                ))
+            }
+        }
+
         fn create_point(
             &mut self,
             _transaction: TransactionId,
@@ -2413,6 +2477,182 @@ mod tests {
                 .count(),
             1
         );
+        Ok(())
+    }
+
+    #[test]
+    fn code_book_manager_previews_and_persists_rule_edits() -> Result<(), Box<dyn Error>> {
+        let mut host = MockHost::default();
+        insert_points(&mut host, &request())?;
+        let listed = manage_code_book(&mut host, &CodeBookManagerRequest::List)?;
+        let CodeBookManagerResult::Snapshot(snapshot) = listed else {
+            return Err("code-book manager did not return rows".into());
+        };
+        assert_eq!(snapshot.rows.len(), 8);
+        assert!(snapshot.summary.contains("1 coded points"));
+        let row = snapshot
+            .rows
+            .iter()
+            .find(|row| row.rule_id == "station")
+            .ok_or("missing station rule")?;
+        assert_eq!(row.status, "1 point");
+        let mut edit = CodeRuleEdit {
+            record: row.record.clone(),
+            rule_id: row.rule_id.clone(),
+            pattern: row.pattern.clone(),
+            match_mode: row.match_mode.clone(),
+            description: "Edited station rule".into(),
+            optimization_rank: f64::from(row.optimization_rank),
+            layer: row.layer.clone(),
+            graphic_kind: row.graphic_kind.clone(),
+            style_or_symbol: row.style_or_symbol.clone(),
+            scale_or_width: row.scale_or_width,
+            attribute_from_suffix: row.attribute_from_suffix.clone(),
+        };
+        let preview = manage_code_book(
+            &mut host,
+            &CodeBookManagerRequest::Preview {
+                rows: snapshot
+                    .rows
+                    .iter()
+                    .map(|row| CodeRuleEdit {
+                        record: row.record.clone(),
+                        rule_id: row.rule_id.clone(),
+                        pattern: row.pattern.clone(),
+                        match_mode: row.match_mode.clone(),
+                        description: if row.rule_id == "station" {
+                            edit.description.clone()
+                        } else {
+                            row.description.clone()
+                        },
+                        optimization_rank: f64::from(row.optimization_rank),
+                        layer: row.layer.clone(),
+                        graphic_kind: row.graphic_kind.clone(),
+                        style_or_symbol: row.style_or_symbol.clone(),
+                        scale_or_width: row.scale_or_width,
+                        attribute_from_suffix: row.attribute_from_suffix.clone(),
+                    })
+                    .collect(),
+            },
+        )?;
+        let CodeBookManagerResult::Snapshot(preview) = preview else {
+            return Err("code-book preview did not return rows".into());
+        };
+        assert!(
+            preview
+                .rows
+                .iter()
+                .any(|row| row.description == edit.description)
+        );
+        edit.pattern = "STATION".into();
+        manage_code_book(
+            &mut host,
+            &CodeBookManagerRequest::Update { rows: vec![edit] },
+        )?;
+        let mut reopened = host.clone();
+        let listed = manage_code_book(&mut reopened, &CodeBookManagerRequest::List)?;
+        let CodeBookManagerResult::Snapshot(snapshot) = listed else {
+            return Err("reopened code-book manager did not return rows".into());
+        };
+        assert!(
+            snapshot
+                .rows
+                .iter()
+                .any(|row| row.rule_id == "station" && row.pattern == "STATION")
+        );
+        Ok(())
+    }
+
+    #[test]
+    fn coded_features_are_native_linked_and_replaced_transactionally() -> Result<(), Box<dyn Error>>
+    {
+        let mut host = MockHost::default();
+        let rows = vec![
+            PointRow {
+                number: "1".into(),
+                x: 0.0,
+                y: 0.0,
+                elevation: 0.0,
+                code: "EDG-START".into(),
+            },
+            PointRow {
+                number: "2".into(),
+                x: 10.0,
+                y: 0.0,
+                elevation: 0.0,
+                code: "EDG-ARC_START".into(),
+            },
+            PointRow {
+                number: "3".into(),
+                x: 10.0,
+                y: 10.0,
+                elevation: 0.0,
+                code: "EDG".into(),
+            },
+            PointRow {
+                number: "4".into(),
+                x: 0.0,
+                y: 10.0,
+                elevation: 0.0,
+                code: "EDG-ARC_END-CLOSE".into(),
+            },
+            PointRow {
+                number: "10".into(),
+                x: 20.0,
+                y: 0.0,
+                elevation: 0.0,
+                code: "EDG-ON_CIRCLE".into(),
+            },
+            PointRow {
+                number: "11".into(),
+                x: 25.0,
+                y: 5.0,
+                elevation: 0.0,
+                code: "EDG-ON_CIRCLE".into(),
+            },
+            PointRow {
+                number: "12".into(),
+                x: 30.0,
+                y: 0.0,
+                elevation: 0.0,
+                code: "EDG-ON_CIRCLE".into(),
+            },
+            PointRow {
+                number: "20".into(),
+                x: 5.0,
+                y: 5.0,
+                elevation: 0.0,
+                code: "TREE".into(),
+            },
+        ];
+        insert_points(
+            &mut host,
+            &InsertPointsRequest {
+                rows,
+                convention: CoordinateConvention::CadXy,
+                label_height: 0.25,
+            },
+        )?;
+        let first = generate_coded_features(&mut host, GenerateCodedFeaturesRequest::default())?;
+        assert_eq!((first.paths, first.circles, first.symbols), (1, 1, 1));
+        assert!(first.entities >= 10);
+        assert_eq!(first.replaced_entities, 0);
+        let linked =
+            host.find_entities_by_metadata(FEATURE_SET_METADATA_KEY, FEATURE_SET_METADATA_VALUE)?;
+        assert_eq!(linked.len(), first.entities);
+        assert!(linked.iter().any(|entity| entity.kind == EntityKind::Arc));
+        assert!(
+            linked
+                .iter()
+                .any(|entity| entity.kind == EntityKind::Circle)
+        );
+
+        let second = generate_coded_features(&mut host, GenerateCodedFeaturesRequest::default())?;
+        assert_eq!(second.replaced_entities, first.entities);
+        let linked =
+            host.find_entities_by_metadata(FEATURE_SET_METADATA_KEY, FEATURE_SET_METADATA_VALUE)?;
+        assert_eq!(linked.len(), second.entities);
+        assert_eq!(host.events.last(), Some(&"commit"));
         Ok(())
     }
 

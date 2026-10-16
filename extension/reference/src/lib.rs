@@ -11,13 +11,15 @@ mod component {
 
     use cadcraft::extension::drawing;
     use cadcraft::extension::geometry::{
+        ArcRequest as WitArcRequest, CircleRequest as WitCircleRequest,
         EntityKind as WitEntityKind, EntityView as WitEntityView, LineRequest as WitLineRequest,
         Point3 as WitPoint3, PointRequest as WitPointRequest, TextRequest as WitTextRequest,
     };
     use surveycraft_cadcraft::{
-        CadcraftHost, EntityId, EntityKind, EntityView, HostError, InsertPointsRequest,
-        LineRequest, PointManagerRequest, PointRequest, TextRequest, TransactionId, insert_points,
-        inspect_project, manage_points, run_reference_extension,
+        ArcRequest, CadcraftHost, CircleRequest, CodeBookManagerRequest, EntityId, EntityKind,
+        EntityView, GenerateCodedFeaturesRequest, HostError, InsertPointsRequest, LineRequest,
+        PointManagerRequest, PointRequest, TextRequest, TransactionId, generate_coded_features,
+        insert_points, inspect_project, manage_code_book, manage_points, run_reference_extension,
     };
     use surveycraft_geometry::Point3;
 
@@ -47,6 +49,26 @@ mod component {
                         manage_points(&mut host, &request).map_err(|error| error.to_string())?;
                     serde_json::to_string(&result)
                         .map_err(|error| format!("cannot encode point manager result: {error}"))
+                }
+                "manage-code-book" => {
+                    let request: CodeBookManagerRequest = serde_json::from_str(&parameters_json)
+                        .map_err(|error| format!("invalid code-book manager action: {error}"))?;
+                    let result =
+                        manage_code_book(&mut host, &request).map_err(|error| error.to_string())?;
+                    serde_json::to_string(&result)
+                        .map_err(|error| format!("cannot encode code-book manager result: {error}"))
+                }
+                "generate-coded-features" => {
+                    let request = if parameters_json.trim() == "null" {
+                        GenerateCodedFeaturesRequest::default()
+                    } else {
+                        serde_json::from_str(&parameters_json)
+                            .map_err(|error| format!("invalid coded-feature options: {error}"))?
+                    };
+                    let result = generate_coded_features(&mut host, request)
+                        .map_err(|error| error.to_string())?;
+                    serde_json::to_string(&result)
+                        .map_err(|error| format!("cannot encode coded-feature result: {error}"))
                 }
                 "reference-line" => {
                     let request = LineRequest {
@@ -97,6 +119,38 @@ mod component {
                 layer: request.layer.clone(),
             };
             drawing::create_point(transaction.0, &request)
+                .map(EntityId)
+                .map_err(host_error)
+        }
+
+        fn create_arc(
+            &mut self,
+            transaction: TransactionId,
+            request: &ArcRequest,
+        ) -> Result<EntityId, HostError> {
+            let request = WitArcRequest {
+                center: wit_point(request.center),
+                radius: request.radius,
+                start_degrees: request.start_degrees,
+                end_degrees: request.end_degrees,
+                layer: request.layer.clone(),
+            };
+            drawing::create_arc(transaction.0, &request)
+                .map(EntityId)
+                .map_err(host_error)
+        }
+
+        fn create_circle(
+            &mut self,
+            transaction: TransactionId,
+            request: &CircleRequest,
+        ) -> Result<EntityId, HostError> {
+            let request = WitCircleRequest {
+                center: wit_point(request.center),
+                radius: request.radius,
+                layer: request.layer.clone(),
+            };
+            drawing::create_circle(transaction.0, &request)
                 .map(EntityId)
                 .map_err(host_error)
         }
@@ -249,6 +303,8 @@ mod component {
             .transpose()?;
         let kind = match view.kind {
             WitEntityKind::Line => EntityKind::Line,
+            WitEntityKind::Arc => EntityKind::Arc,
+            WitEntityKind::Circle => EntityKind::Circle,
             WitEntityKind::Point => EntityKind::Point,
             WitEntityKind::Text => EntityKind::Text,
             WitEntityKind::Other => EntityKind::Other,

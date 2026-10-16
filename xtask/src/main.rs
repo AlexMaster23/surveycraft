@@ -1,3 +1,4 @@
+use std::collections::HashSet;
 use std::error::Error;
 use std::fmt::{Display, Formatter};
 use std::fs;
@@ -39,6 +40,7 @@ fn package_surveycraft() -> Result<(), Box<dyn Error>> {
         ))
     })?;
     let manifest = fs::read(&manifest_path)?;
+    validate_extension_manifest(&manifest)?;
     let symbol_pack = fs::read(&symbol_pack_path)?;
     let parsed_symbol_pack: SymbolPack = serde_json::from_slice(&symbol_pack)?;
     let catalog = SymbolCatalog::compile(vec![parsed_symbol_pack])?;
@@ -71,6 +73,78 @@ fn package_surveycraft() -> Result<(), Box<dyn Error>> {
     let package_path = output_directory.join("surveycraft.cadcraft-extension");
     fs::write(&package_path, package)?;
     println!("{}", package_path.display());
+    Ok(())
+}
+
+fn validate_extension_manifest(manifest: &[u8]) -> Result<(), TaskError> {
+    let value: serde_json::Value = serde_json::from_slice(manifest)
+        .map_err(|error| TaskError(format!("invalid extension manifest JSON: {error}")))?;
+    let version = value
+        .get("version")
+        .and_then(serde_json::Value::as_str)
+        .ok_or_else(|| TaskError("extension manifest has no string version".into()))?;
+    if version != env!("CARGO_PKG_VERSION") {
+        return Err(TaskError(format!(
+            "extension manifest version {version} does not match workspace version {}",
+            env!("CARGO_PKG_VERSION")
+        )));
+    }
+    let commands = value
+        .get("commands")
+        .and_then(serde_json::Value::as_array)
+        .ok_or_else(|| TaskError("extension manifest has no command array".into()))?;
+    for (command_index, command) in commands.iter().enumerate() {
+        let Some(ui) = command.get("ui") else {
+            continue;
+        };
+        let mut keys = HashSet::new();
+        for property in ["idKey", "entityIdsKey"] {
+            if let Some(key) = ui.get(property).and_then(serde_json::Value::as_str) {
+                validate_manifest_field(key, command_index, property, &mut keys)?;
+            }
+        }
+        let Some(columns) = ui.get("columns").and_then(serde_json::Value::as_array) else {
+            continue;
+        };
+        for (column_index, column) in columns.iter().enumerate() {
+            let key = column
+                .get("key")
+                .and_then(serde_json::Value::as_str)
+                .ok_or_else(|| {
+                    TaskError(format!(
+                        "commands[{command_index}].ui.columns[{column_index}] has no string key"
+                    ))
+                })?;
+            validate_manifest_field(
+                key,
+                command_index,
+                &format!("columns[{column_index}].key"),
+                &mut keys,
+            )?;
+        }
+    }
+    Ok(())
+}
+
+fn validate_manifest_field(
+    key: &str,
+    command_index: usize,
+    property: &str,
+    keys: &mut HashSet<String>,
+) -> Result<(), TaskError> {
+    let mut characters = key.chars();
+    let valid = key.len() <= 64
+        && characters
+            .next()
+            .is_some_and(|value| value.is_ascii_lowercase())
+        && characters.all(|value| {
+            value.is_ascii_lowercase() || value.is_ascii_digit() || matches!(value, '.' | '_' | '-')
+        });
+    if !valid || !keys.insert(key.to_ascii_lowercase()) {
+        return Err(TaskError(format!(
+            "commands[{command_index}].ui.{property} must be a unique lower-case field name"
+        )));
+    }
     Ok(())
 }
 

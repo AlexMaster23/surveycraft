@@ -2,7 +2,7 @@
   "schemaVersion": 2,
   "id": "io.github.alexmaster23.surveycraft",
   "name": "SurveyCraft",
-  "version": "0.3.0",
+  "version": "0.4.0",
   "cadcraft": ">=0.7.0, <1.0.0",
   "description": "Open-source surveying tools for CADCraft.",
   "license": "MIT OR Apache-2.0",
@@ -173,6 +173,124 @@
       "interactive": false
     },
     {
+      "id": "surveycraft.coding.code-book",
+      "label": "Code Book...",
+      "menu": ["SurveyCraft", "Coding", "Code Book..."],
+      "aliases": ["SCCODEBOOK", "SCCB"],
+      "params": "{action:'list'|'preview'|'update'|'delete'|'export',...} -> native code-rule editor rows, diagnostics or JSON",
+      "function": "manage-code-book",
+      "interactive": false,
+      "ui": {
+        "kind": "manager",
+        "title": "SurveyCraft — Code Book",
+        "description": "Edit exact, prefix and regex rules; preview every unsaved rule against coded points before saving. Match mode: exact/prefix/regex. Graphic kind: none/line/symbol.",
+        "accent": "#F47A20",
+        "idKey": "record",
+        "entityIdsKey": "entities",
+        "allowDelete": true,
+        "allowExport": true,
+        "allowAdd": true,
+        "allowEntityActions": false,
+        "allowSynchronize": false,
+        "allowPreview": true,
+        "columns": [
+          {
+            "key": "rule-id",
+            "label": "Rule ID",
+            "kind": "text",
+            "editable": true,
+            "required": true,
+            "unique": true,
+            "width": 130
+          },
+          {
+            "key": "pattern",
+            "label": "Pattern",
+            "kind": "text",
+            "editable": true,
+            "required": true,
+            "width": 120
+          },
+          {
+            "key": "match-mode",
+            "label": "Match mode",
+            "kind": "text",
+            "editable": true,
+            "required": true,
+            "width": 100
+          },
+          {
+            "key": "description",
+            "label": "Description",
+            "kind": "text",
+            "editable": true,
+            "required": true,
+            "width": 180
+          },
+          {
+            "key": "optimization-rank",
+            "label": "Rank",
+            "kind": "number",
+            "editable": true,
+            "required": true,
+            "width": 70
+          },
+          {
+            "key": "layer",
+            "label": "Layer ID",
+            "kind": "text",
+            "editable": true,
+            "width": 105
+          },
+          {
+            "key": "graphic-kind",
+            "label": "Graphic kind",
+            "kind": "text",
+            "editable": true,
+            "required": true,
+            "width": 105
+          },
+          {
+            "key": "style-or-symbol",
+            "label": "Style / symbol",
+            "kind": "text",
+            "editable": true,
+            "width": 170
+          },
+          {
+            "key": "scale-or-width",
+            "label": "Scale / width",
+            "kind": "number",
+            "editable": true,
+            "required": true,
+            "width": 105
+          },
+          {
+            "key": "attribute-from-suffix",
+            "label": "Suffix attribute",
+            "kind": "text",
+            "editable": true,
+            "width": 110
+          },
+          {
+            "key": "status",
+            "label": "Preview",
+            "kind": "text",
+            "width": 105
+          }
+        ]
+      }
+    },
+    {
+      "id": "surveycraft.coding.generate",
+      "label": "Generate coded features",
+      "menu": ["SurveyCraft", "Coding", "Generate coded features"],
+      "aliases": ["SCGENERATE", "SCGEN"],
+      "params": "{planScaleDenominator?:number,includeUnmarked?:boolean} -> generated feature and diagnostic counts",
+      "function": "generate-coded-features",
+      "interactive": false
+    },
+    {
       "id": "surveycraft.reference-line",
       "label": "Create diagnostic reference line",
       "menu": [],
@@ -202,6 +320,16 @@
           "command": "surveycraft.points.check-links",
           "icon": "properties",
           "size": "small"
+        },
+        {
+          "command": "surveycraft.coding.code-book",
+          "icon": "settings",
+          "size": "large"
+        },
+        {
+          "command": "surveycraft.coding.generate",
+          "icon": "polyline",
+          "size": "large"
         }
       ]
     }

@@ -6,7 +6,10 @@ CADCraft host requirements change.
 
 ## Unreleased
 
-- Next target: v0.4.0 coding and feature generation.
+- Next target: v0.5.0 point quality and COGO beta.
+
+## 0.4.0 — 2026-10-16
+
 - Added a bounded CAD-independent code-book engine with exact, prefix and regular-expression
   matching, deterministic precedence and structured diagnostics.
 - Added point-code selection/replacement, ordered line/arc/circle planning, line-style decisions,
@@ -19,6 +22,14 @@ CADCraft host requirements change.
   host-neutral code-book editor/preview state model with inline symbol vectors and diagnostics.
 - Added a country-neutral starter code book and package-time validation that all bundled code rules
   resolve against the bundled symbol catalog.
+- Added the native Code Book manager with add, edit, delete, preview and deterministic JSON export
+  for rules stored with the drawing.
+- Added native, transactional generation of coded lines, three-point arcs, three-point circles and
+  decomposed open symbols on mapped layers.
+- Added stable feature/rule/source-point metadata, deterministic replacement on regeneration and
+  one-step Undo for the complete generated result.
+- Extended the custom CADCraft host with guarded native arc/circle creation and reusable manager
+  options for preview-only and non-entity data sets.
 
 ## 0.3.0 — 2026-10-16
 
