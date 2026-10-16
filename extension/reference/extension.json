@@ -17,15 +17,32 @@
       "label": "Import and insert points...",
       "menu": ["SurveyCraft", "Points", "Import and insert points..."],
       "aliases": ["SCPOINTS", "SCPIMPORT"],
-      "params": "{rows:[{number,northing,easting,elevation,code?}],labelHeight?} -> {inserted,entities}",
+      "params": "{convention:'cad-xy'|'survey-xy',rows:[{number,x,y,elevation,code?}],labelHeight?} -> {inserted,entities}",
       "function": "insert-points",
       "interactive": false,
       "ui": {
         "kind": "table",
         "title": "SurveyCraft — Import points",
-        "description": "Type survey points or open a CSV, COO, TXT or XYZ coordinate file. Review the table, then insert every valid row into the active drawing.",
+        "description": "Choose the source coordinate convention, then type points or open a CSV, COO, TXT or XYZ file. Review the mapping and insert every valid row into the active drawing.",
         "submitLabel": "Insert points",
         "accent": "#F47A20",
+        "selects": [
+          {
+            "key": "convention",
+            "label": "Coordinate convention",
+            "default": "cad-xy",
+            "choices": [
+              {
+                "value": "cad-xy",
+                "label": "CAD / GIS — X → CAD X, Y → CAD Y"
+              },
+              {
+                "value": "survey-xy",
+                "label": "Survey / TopoLT — X → CAD Y, Y → CAD X"
+              }
+            ]
+          }
+        ],
         "columns": [
           {
             "key": "number",
@@ -36,18 +53,18 @@
             "aliases": ["point", "name", "id", "nr", "numar", "număr"]
           },
           {
-            "key": "northing",
-            "label": "Northing (Y)",
+            "key": "x",
+            "label": "Input X",
             "kind": "number",
             "required": true,
-            "aliases": ["northing", "north", "n", "y"]
+            "aliases": ["easting", "east", "e", "cad x", "cadx"]
           },
           {
-            "key": "easting",
-            "label": "Easting (X)",
+            "key": "y",
+            "label": "Input Y",
             "kind": "number",
             "required": true,
-            "aliases": ["easting", "east", "e", "x"]
+            "aliases": ["northing", "north", "n", "cad y", "cady"]
           },
           {
             "key": "elevation",
@@ -72,6 +89,21 @@
       "params": "{} -> {entityId}",
       "function": "reference-line",
       "interactive": false
+    }
+  ],
+  "toolsets": [
+    {
+      "tab": "drafting",
+      "group": "SurveyCraft",
+      "position": "top",
+      "accent": "#F47A20",
+      "tools": [
+        {
+          "command": "surveycraft.points.import",
+          "icon": "import",
+          "size": "large"
+        }
+      ]
     }
   ],
   "permissions": [

@@ -45,11 +45,13 @@ undoable transaction.
 
 ### Point import dialog (implemented MVP)
 
-The first working task surface is a compact native CADCraft table opened from **SurveyCraft >
-Points > Import and insert points...** or `SCPOINTS`. It uses the orange brand accent while keeping
-CADCraft's theme and controls. A user can:
+The first working task surface is a compact native CADCraft table. Press **Import and insert
+points...** in the orange-marked **SurveyCraft** group at the top of CADCraft's Drafting Tool Sets,
+open **SurveyCraft > Points > Import and insert points...**, or type `SCPOINTS`. It uses the orange
+brand accent while keeping CADCraft's theme and controls. A user can:
 
-- type point number, Northing (Y), Easting (X), elevation (Z), and optional code/description;
+- select CAD/GIS or Survey/TopoLT X/Y interpretation before insertion;
+- type point number, source X, source Y, elevation (Z), and optional code/description;
 - open UTF-8 CSV, COO, TXT or XYZ text, with comma, semicolon or tab delimiters;
 - map common English and Romanian headers, or use the declared column order when no header exists;
 - add rows, remove selected rows, sort by point number and clear the table;
@@ -89,8 +91,8 @@ No irreversible work occurs when a file is merely selected or a preview is shown
 ## Navigation
 
 The top-level `SurveyCraft` menu mirrors the modules in the palette. Frequently used commands also
-appear in CADCraft command search and can be pinned to the existing toolbar. SurveyCraft does not
-create a second ribbon or private menu framework.
+appear in SurveyCraft's orange-marked native Tool Sets group and CADCraft command search. The
+extension does not create a second ribbon or private menu framework.
 
 ## Accessibility and localization
 

@@ -15,10 +15,11 @@ point-import workflow. The implementation plan is in
 [docs/UI_BLUEPRINT.md](docs/UI_BLUEPRINT.md).
 
 The working point command opens a native CADCraft table, accepts manually entered or imported
-coordinates, validates the rows, and inserts CAD points plus number, elevation and optional code
-labels. The whole operation is transactional and is removed by one Undo. The schema 2 host is
-implemented and proven locally on CADCraft's `feature/extension-system` working branch; it is not
-part of a public CADCraft release yet.
+coordinates, lets the user choose CAD/GIS or Survey/TopoLT X/Y interpretation, validates the rows,
+and inserts CAD points plus number, elevation and optional code labels. The whole operation is
+transactional and is removed by one Undo. The schema 2 host is implemented and proven locally on
+CADCraft's `feature/extension-system` working branch; it is not part of a public CADCraft release
+yet.
 
 ## Product promise
 
@@ -61,9 +62,10 @@ cargo run -p xtask
 ```
 
 This writes `target/extension-package/surveycraft.cadcraft-extension`. In CADCraft, open
-**Tools > Extensions...**, install that file, then use **SurveyCraft > Points > Import and insert
-points...** or type `SCPOINTS`. See [docs/POINT_IMPORT.md](docs/POINT_IMPORT.md) for the exact input
-contract and drawing output.
+**Tools > Extensions...** and install that file. The orange-marked **SurveyCraft** group appears at
+the top of the Drafting Tool Sets palette; press **Import and insert points...** there, use
+**SurveyCraft > Points > Import and insert points...**, or type `SCPOINTS`. See
+[docs/POINT_IMPORT.md](docs/POINT_IMPORT.md) for the exact input contract and drawing output.
 
 ## Core and CLI
 

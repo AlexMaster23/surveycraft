@@ -41,17 +41,29 @@ pub struct TextRequest {
 #[serde(rename_all = "camelCase")]
 pub struct PointRow {
     pub number: String,
-    pub easting: f64,
-    pub northing: f64,
+    #[serde(alias = "easting")]
+    pub x: f64,
+    #[serde(alias = "northing")]
+    pub y: f64,
     pub elevation: f64,
     #[serde(default)]
     pub code: String,
+}
+
+#[derive(Debug, Clone, Copy, Default, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "kebab-case")]
+pub enum CoordinateConvention {
+    #[default]
+    CadXy,
+    SurveyXy,
 }
 
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct InsertPointsRequest {
     pub rows: Vec<PointRow>,
+    #[serde(default)]
+    pub convention: CoordinateConvention,
     #[serde(default = "default_label_height")]
     pub label_height: f64,
 }
@@ -167,7 +179,8 @@ pub fn insert_points(
         .map_err(|error| AdapterError::new("begin point transaction", error, None))?;
     let mut entities = 0usize;
     for row in &request.rows {
-        let position = point(row.easting, row.northing, row.elevation)
+        let (cad_x, cad_y) = cad_xy(row, request.convention);
+        let position = point(cad_x, cad_y, row.elevation)
             .map_err(|error| rollback_error(host, transaction, "prepare point", error))?;
         create_point(
             host,
@@ -195,7 +208,7 @@ pub fn insert_points(
             ),
         ];
         for (value, dx, dy, layer) in labels {
-            let label_position = point(row.easting + dx, row.northing + dy, row.elevation)
+            let label_position = point(cad_x + dx, cad_y + dy, row.elevation)
                 .map_err(|error| rollback_error(host, transaction, "prepare point label", error))?;
             create_text(
                 host,
@@ -211,12 +224,8 @@ pub fn insert_points(
             entities += 1;
         }
         if !row.code.trim().is_empty() {
-            let code_position = point(
-                row.easting + offset,
-                row.northing - offset * 2.4,
-                row.elevation,
-            )
-            .map_err(|error| rollback_error(host, transaction, "prepare point code", error))?;
+            let code_position = point(cad_x + offset, cad_y - offset * 2.4, row.elevation)
+                .map_err(|error| rollback_error(host, transaction, "prepare point code", error))?;
             create_text(
                 host,
                 transaction,
@@ -243,6 +252,13 @@ pub fn insert_points(
         inserted: request.rows.len(),
         entities,
     })
+}
+
+fn cad_xy(row: &PointRow, convention: CoordinateConvention) -> (f64, f64) {
+    match convention {
+        CoordinateConvention::CadXy => (row.x, row.y),
+        CoordinateConvention::SurveyXy => (row.y, row.x),
+    }
 }
 
 fn validate_insert_request(request: &InsertPointsRequest) -> Result<(), HostError> {
@@ -280,7 +296,7 @@ fn validate_insert_request(request: &InsertPointsRequest) -> Result<(), HostErro
                 index + 1
             )));
         }
-        point(row.easting, row.northing, row.elevation).map_err(|_| {
+        point(row.x, row.y, row.elevation).map_err(|_| {
             HostError::new(format!(
                 "row {} has coordinates outside the supported drawing range",
                 index + 1
@@ -290,8 +306,8 @@ fn validate_insert_request(request: &InsertPointsRequest) -> Result<(), HostErro
     Ok(())
 }
 
-fn point(easting: f64, northing: f64, elevation: f64) -> Result<Point3, HostError> {
-    let values = [easting, northing, elevation];
+fn point(cad_x: f64, cad_y: f64, elevation: f64) -> Result<Point3, HostError> {
+    let values = [cad_x, cad_y, elevation];
     if values
         .iter()
         .any(|value| !value.is_finite() || value.abs() > MAX_COORDINATE)
@@ -300,7 +316,7 @@ fn point(easting: f64, northing: f64, elevation: f64) -> Result<Point3, HostErro
             "coordinates must be finite and within the supported drawing range",
         ));
     }
-    Point3::new(easting, northing, elevation).map_err(|error| HostError::new(error.to_string()))
+    Point3::new(cad_x, cad_y, elevation).map_err(|error| HostError::new(error.to_string()))
 }
 
 fn create_point(
@@ -370,6 +386,7 @@ mod tests {
     #[derive(Default)]
     struct MockHost {
         events: Vec<&'static str>,
+        points: Vec<Point3>,
         fail_create: bool,
     }
 
@@ -395,12 +412,13 @@ mod tests {
         fn create_point(
             &mut self,
             _transaction: TransactionId,
-            _request: &super::PointRequest,
+            request: &super::PointRequest,
         ) -> Result<EntityId, HostError> {
             self.events.push("create-point");
             if self.fail_create {
                 Err(HostError::new("synthetic create failure"))
             } else {
+                self.points.push(request.position);
                 Ok(EntityId(43))
             }
         }
@@ -460,11 +478,12 @@ mod tests {
         let request = super::InsertPointsRequest {
             rows: vec![super::PointRow {
                 number: "101".into(),
-                easting: 500.0,
-                northing: 200.0,
+                x: 500.0,
+                y: 200.0,
                 elevation: 12.5,
                 code: "STN".into(),
             }],
+            convention: super::CoordinateConvention::CadXy,
             label_height: 0.25,
         };
         let result = super::insert_points(&mut host, &request)?;
@@ -486,6 +505,7 @@ mod tests {
                 "commit"
             ]
         );
+        assert_eq!(host.points, [Point3::new(500.0, 200.0, 12.5)?]);
         Ok(())
     }
 
@@ -496,24 +516,64 @@ mod tests {
             rows: vec![
                 super::PointRow {
                     number: "P-1".into(),
-                    easting: 500.0,
-                    northing: 200.0,
+                    x: 500.0,
+                    y: 200.0,
                     elevation: 12.5,
                     code: String::new(),
                 },
                 super::PointRow {
                     number: "p-1".into(),
-                    easting: 501.0,
-                    northing: 201.0,
+                    x: 501.0,
+                    y: 201.0,
                     elevation: 12.6,
                     code: String::new(),
                 },
             ],
+            convention: super::CoordinateConvention::CadXy,
             label_height: 0.25,
         };
 
         let result = super::insert_points(&mut host, &request);
         assert!(result.is_err());
         assert!(host.events.is_empty());
+    }
+
+    #[test]
+    fn romanian_survey_y_becomes_cad_x_without_transposing_the_outline()
+    -> Result<(), Box<dyn Error>> {
+        let coordinates = [
+            ("L1", 595_286.485, 337_275.053),
+            ("L2", 595_309.544, 337_337.121),
+            ("L3", 595_394.773, 337_305.449),
+            ("L4", 595_384.907, 337_284.954),
+            ("L5", 595_467.684, 337_254.194),
+            ("L6", 595_448.704, 337_214.771),
+        ];
+        let request = super::InsertPointsRequest {
+            rows: coordinates
+                .iter()
+                .map(|(number, survey_y, survey_x)| super::PointRow {
+                    number: (*number).into(),
+                    x: *survey_x,
+                    y: *survey_y,
+                    elevation: 0.0,
+                    code: String::new(),
+                })
+                .collect(),
+            convention: super::CoordinateConvention::SurveyXy,
+            label_height: 0.25,
+        };
+        let mut host = MockHost::default();
+
+        super::insert_points(&mut host, &request)?;
+
+        let expected = coordinates
+            .iter()
+            .map(|(_, survey_y, survey_x)| Point3::new(*survey_y, *survey_x, 0.0))
+            .collect::<Result<Vec<_>, _>>()?;
+        assert_eq!(host.points, expected);
+        assert!(host.points[0].x() < host.points[4].x());
+        assert!(host.points[1].x() < host.points[5].x());
+        Ok(())
     }
 }

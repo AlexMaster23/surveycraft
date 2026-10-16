@@ -1,18 +1,30 @@
 # Import and insert survey points
 
 SurveyCraft's first CAD workflow turns a reviewed coordinate table into native CADCraft drawing
-entities. It is available from **SurveyCraft > Points > Import and insert points...** and from the
-`SCPOINTS` or `SCPIMPORT` command aliases.
+entities. It is available from the orange-marked **SurveyCraft** group at the top of the Drafting
+Tool Sets palette, from **SurveyCraft > Points > Import and insert points...**, and from the
+`SCPOINTS` or `SCPIMPORT` command aliases. Every entry point starts the same command and native
+table.
 
 ## Table columns
 
 | Column | Required | Meaning |
 |---|---:|---|
 | Point number | yes | Unique text identifier; matching is case-insensitive |
-| Northing (Y) | yes | Drawing Y coordinate |
-| Easting (X) | yes | Drawing X coordinate |
+| Input X | yes | X value exactly as named by the source file or survey convention |
+| Input Y | yes | Y value exactly as named by the source file or survey convention |
 | Elevation (Z) | yes | Drawing Z coordinate and elevation-label value |
 | Code / description | no | Short field code or point description |
+
+Choose the source's coordinate convention explicitly above the table:
+
+- **CAD / GIS** keeps the axes: input X becomes CAD X and input Y becomes CAD Y. Use this for
+  ordinary Cartesian X/Y and for Easting/Northing data.
+- **Survey / TopoLT** swaps the named survey axes: input X becomes CAD Y and input Y becomes CAD X.
+  Use this for Romanian Stereo 70 / TopoLT-style X/Y files.
+
+The default is CAD / GIS because it is the international Cartesian convention. The current choice
+is submitted with the rows, so previewed values cannot be silently interpreted by another mode.
 
 Coordinates must be finite numbers. Decimal dots are accepted in every file; decimal commas are
 also accepted when the file uses semicolons or tabs as its field delimiter. A maximum of 2,000
@@ -22,20 +34,22 @@ points is accepted per insertion.
 
 Use **Open CSV / text** in the dialog to select a UTF-8 `.csv`, `.coo`, `.txt` or `.xyz` file.
 Comma, semicolon and tab delimiters are detected automatically. Headers can use the labels above or
-common aliases such as `number`, `id`, `nr`, `northing`, `n`, `y`, `easting`, `e`, `x`, `elevation`,
+common aliases such as `number`, `id`, `nr`, `x`, `easting`, `e`, `y`, `northing`, `n`, `elevation`,
 `z`, `h`, `cota`, `code`, `description` and `cod`. Header matching is case-insensitive. Romanian
-`numar`/`număr` and `cota`/`cotă` are supported.
+`numar`/`număr` and `cota`/`cotă` are supported. `Easting` maps to input X and `Northing` maps to
+input Y; literal `X` and `Y` headers remain literal and are interpreted by the selected convention.
 
 Example:
 
 ```csv
-number,northing,easting,elevation,code
-101,300000.500,500000.250,100.125,STN
-102,300010.000,500015.500,100.310,EDGE
+number,Y,X,elevation,code
+L1,595286.485,337275.053,0.000,
+L2,595309.544,337337.121,0.000,
 ```
 
-Files without a recognized header use the dialog's declared order: point number, Northing,
-Easting, elevation, code. Review that mapping in the table before insertion.
+Select **Survey / TopoLT** for that example. Files without a recognized header use the dialog's
+declared order: point number, input X, input Y, elevation, code. Review both the values and the
+coordinate convention before insertion.
 
 ## Drawing output
 
@@ -43,7 +57,7 @@ Each accepted row creates one native CAD point and text labels on predictable la
 
 | Layer | Entity |
 |---|---|
-| `SC-POINTS` | Point at `(Easting, Northing, Elevation)` |
+| `SC-POINTS` | Point at the convention-mapped `(CAD X, CAD Y, Elevation)` |
 | `SC-POINT-NUMBERS` | Point-number text |
 | `SC-POINT-ELEVATIONS` | Elevation text rounded to three decimals |
 | `SC-POINT-CODES` | Optional code/description text |
